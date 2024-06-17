@@ -8,49 +8,49 @@
 
 #include <shogle/res/mesh/quad.hpp>
 
-using namespace ntf::shogle;
+using namespace ntf;
 
 int main() {
-  ntf::log::set_level(ntf::loglevel::LOG_VERBOSE);
-  engine eng{800, 600, "test"};
+  log::set_level(loglevel::LOG_VERBOSE);
+  shogle::engine eng{800, 600, "test"};
 
-  res::sprite_shader shader2d{};
-  res::quad_mesh quad{};
+  shogle::sprite_shader shader2d{};
+  shogle::quad_mesh quad{};
 
-  res::model_shader shader3d{};
+  shogle::model_shader shader3d{};
 
-  res::spritesheet sheet{"res/spritesheets/2hus.json"};
+  shogle::spritesheet sheet{"res/spritesheets/2hus.json"};
   auto& rin = sheet["rin_dance"];
   auto& cino = sheet["cirno_fall"];
 
-  res::model model{"res/models/cirno_fumo/cirno_fumo.obj"};
+  shogle::model model{"res/models/cirno_fumo/cirno_fumo.obj"};
   auto& mesh = model[0].mesh;
-  auto& diffuse = model[0].find_material(res::material_type::diffuse);
+  auto& diffuse = model[0].find_material(shogle::material::diffuse);
 
-  auto cam2d = scene::camera2d{eng.window().size()}
+  auto cam2d = shogle::camera2d{eng.window().size()}
     .set_pos(0.0f, 0.0f)
     .set_rot(0.0f)
     .set_zoom(1.0f);
   cam2d.update();
 
-  auto cam3d = scene::camera3d{eng.window().size()}
+  auto cam3d = shogle::camera3d{eng.window().size()}
     .set_pos(0.0f, 0.0f, 0.0f)
-    .set_direction(0.0f, 0.0f, -1.0f);
+    .set_dir(0.0f, 0.0f, -1.0f);
   cam3d.update();
 
-  auto rin_transform = scene::transform2d{}
+  auto rin_transform = shogle::transform2d{}
     .set_pos(0.5f*(vec2)eng.window().size())
     .set_rot(0.0f)
     .set_scale(200.0f*rin.corrected_scale);
   rin_transform.update();
 
-  auto cino_transform = scene::transform2d{}
+  auto cino_transform = shogle::transform2d{}
     .set_pos(0.5f*(vec2)eng.window().size())
     .set_rot(0.0f)
     .set_scale(200.0f*cino.corrected_scale);
   cino_transform.update();
 
-  auto fumo_transform = scene::transform3d{}
+  auto fumo_transform = shogle::transform3d{}
     .set_pos(0.0f, -0.25f, -1.0f)
     .set_scale(0.015f)
     .set_rot(quat{1.0f, vec3{0.0f}});
@@ -60,16 +60,16 @@ int main() {
   size_t cino_index {0};
 
   eng.set_draw_event([&]() {
-    gl::clear_viewport(color3{0.2f}, gl::clear::depth);
+    shogle::gl::clear_viewport(color3{0.2f}, shogle::gl::clear::depth);
 
-    gl::set_depth_test(true);
+    shogle::gl::set_depth_test(true);
     shader3d.set_proj(cam3d.proj())
       .set_view(mat4{1.0f})
       .set_model(fumo_transform.transf())
       .bind_diffuse(diffuse.tex())
       .draw(mesh);
 
-    gl::set_depth_test(false);
+    shogle::gl::set_depth_test(false);
     shader2d.set_proj(cam2d.proj())
       .set_view(mat4{1.0f})
       .set_transform(rin_transform.transf())
@@ -116,13 +116,13 @@ int main() {
   });
 
   eng.set_viewport_event([&](size_t w, size_t h) {
-    gl::set_viewport_size(w, h);
+    shogle::gl::set_viewport_size(w, h);
     cam2d.set_viewport(w, h).update();
     cam3d.set_viewport(w, h).update();
   });
 
-  eng.set_key_event([&](glfw::keycode code, auto, glfw::keystate state, auto) {
-    if (code == glfw::key_escape && state == glfw::press) {
+  eng.set_key_event([&](shogle::glfw::keycode code, auto, shogle::glfw::keystate state, auto) {
+    if (code == shogle::glfw::key_escape && state == shogle::glfw::press) {
       eng.window().close();
     }
   });
