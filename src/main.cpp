@@ -1,108 +1,158 @@
 #include "renderer.hpp"
 
+
 using namespace ntf;
 
 int main() {
   log::set_level(loglevel::verbose);
   shogle::engine eng{800, 600, "test"};
+  eng.win().use_vsync(false);
+  shogle::render_blending(true);
 
-  shogle::quad quad{};
+  sprite_renderer render_sprite{};
 
-  shogle::sprite_shader shader2d{};
-  shogle::model_shader shader3d{};
+  std::vector<world_object> danmaku;
+  std::vector<world_object> new_danmaku;
 
-  shogle::spritesheet sheet{"res/spritesheets/2hus.json"};
-
-  auto& rin_sprite = sheet["rin_dance"];
-  sprite_renderer rin_renderer{shader2d, rin_sprite, quad};
-
-  auto& cino_sprite = sheet["cirno_fall"];
-  sprite_renderer cino_renderer{shader2d, cino_sprite, quad};
-
-  shogle::model cirno_fumo{"res/models/cirno_fumo/cirno_fumo.obj"};
-  model_renderer fumo_renderer{shader3d, cirno_fumo};
-
-  auto cam2d = shogle::camera2d{eng.window().size()}
-    .set_pos(0.0f, 0.0f)
+  shogle::camera2d cam2d{eng.win().size()};
+  cam2d.set_pos(0.0f, 0.0f)
     .set_rot(0.0f)
     .set_zoom(1.0f);
   cam2d.update();
 
-  auto cam3d = shogle::camera3d{eng.window().size()}
-    .set_pos(0.0f, 0.0f, 0.0f)
-    .set_dir(0.0f, 0.0f, -1.0f);
-  cam3d.update();
+  shogle::spritesheet hus_sheet{"res/spritesheets/2hus.json"};
+  shogle::sprite& rin_sprite = hus_sheet["rin_dance"];
 
-  auto rin_transform = shogle::transform2d{}
-    .set_pos(0.5f*(vec2)eng.window().size())
+  shogle::spritesheet effects_sheet{"res/spritesheets/effects.json"};
+  shogle::sprite& star_sprite = effects_sheet["stars_big"];
+  shogle::sprite& star_small_sprite = effects_sheet["stars_small"];
+
+  shogle::spritesheet chara_sheet{"res/spritesheets/chara.json"};
+  shogle::sprite& player_idle = chara_sheet["marisa_idle"];
+  shogle::sprite& player_move = chara_sheet["marisa_move"];
+
+  world_object rin {&rin_sprite};
+  rin.transform.set_pos(0.0f, 0.0f)
     .set_rot(0.0f)
     .set_scale(200.0f*rin_sprite.corrected_scale());
-  rin_transform.update();
+  rin.transform.update();
 
-  auto cino_transform = shogle::transform2d{}
-    .set_pos(0.5f*(vec2)eng.window().size())
+  world_object player {&player_idle};
+  player.transform.set_pos(0.0f, 0.0f)
     .set_rot(0.0f)
-    .set_scale(200.0f*cino_sprite.corrected_scale());
-  cino_transform.update();
+    .set_scale(60.0f*player_idle.corrected_scale());
+  player.transform.update();
 
-  auto fumo_transform = shogle::transform3d{}
-    .set_pos(0.0f, -0.25f, -1.0f)
-    .set_scale(0.015f)
-    .set_rot(quat{1.0f, vec3{0.0f}});
-  fumo_transform.update();
 
-  size_t rin_index {0};
-  size_t cino_index {0};
-
-  eng.set_draw_event([&]() {
+  auto on_render = [&](shogle::window& win, double dt, double alpha) {
     shogle::render_clear(color3{0.2f}, shogle::clear::depth);
-
-    shogle::render_depth_test(true);
-    fumo_renderer(cam3d, fumo_transform);
-
-    shogle::render_depth_test(false);
-    rin_renderer(cam2d, rin_transform, rin_index);
-    cino_renderer(cam2d, cino_transform, cino_index);
-  });
+    render_sprite(cam2d, rin);
+    render_sprite(cam2d, player);
+    for (auto& bullet : danmaku) {
+      render_sprite(cam2d, bullet);
+    }
+    ImGui::Begin("dou");
+    ImGui::Text("fps: %f, alpha: %f", 1/dt, alpha);
+    ImGui::End();
+  };
 
   float t = 0.0f;
   float t2 = 0.0f;
-  float t3 = 0.0f;
-  eng.set_update_event([&](float dt) {
-    auto half_screen = 0.5f*(cmplx)eng.window().size();
+  float phase = 0.0f;
+  auto on_fixed_update = [&](shogle::window& win, double dt) {
     t += dt;
-    rin_transform.set_rot(rin_transform.rot() + PI*dt).update();
-    rin_transform.set_pos(half_screen + 200.0f*math::expic(PI*t));
-
-    cino_transform.set_pos(half_screen).update();
-
-    fumo_transform.set_rot(fumo_transform.rot()*math::axisquat(PI*dt, vec3{0.0f, 1.0f, 0.0f})).update();
-
     t2 += dt;
-    if (t2 > 1/10.0f) {
-      rin_index++;
+    phase += dt*PI*0.25f;
+
+    for (auto& obj : new_danmaku) {
+      danmaku.push_back(std::move(obj));
+    }
+    new_danmaku.clear();
+
+    std::erase_if(danmaku, [](const auto& bullet) { return bullet.del; });
+
+    if (t > 1/10.0f) {
+      rin.index++;
+      player.index++;
+      t = 0.0f;
+      for (size_t i = 0; i < 8; ++i) {
+        world_object bullet {&star_small_sprite};
+        bullet.vel = 200.0f*vec2{sin(phase - i*2*PI/8), cos(phase - i*2*PI/8)};
+        bullet.index = rand() % 10;
+        bullet.ang_speed = PI;
+        bullet.transform.set_pos(rin.transform.pos())
+          .set_scale(20.0f)
+          .update();
+        new_danmaku.push_back(std::move(bullet));
+      }
+    }
+
+    if (t2 > 1/4.0f) {
+      for (size_t i = 0; i < 8; ++i) {
+        world_object bullet {&star_sprite};
+        bullet.vel = 150.0f*vec2{cos(phase + i*2*PI/8), sin(phase + i*2*PI/8)};
+        bullet.index = rand() % 10;
+        bullet.ang_speed = -PI*0.5f;
+        bullet.transform.set_pos(rin.transform.pos())
+          .set_scale(50.0f)
+          .update();
+        new_danmaku.push_back(std::move(bullet));
+      }
       t2 = 0.0f;
     }
 
-    t3 += dt;
-    if (t3 > 1/10.0f) {
-      cino_index++;
-      t3 = 0.0f;
+    for (auto& bullet : danmaku) {
+      auto pos = bullet.transform.pos();
+      pos += bullet.vel*(float)dt;
+      if (pos.x > 800.0f || pos.x < -800.0f || pos.y > 800.0f || pos.y < -800.0f) {
+        bullet.del = true;
+      }
+      bullet.transform.set_pos(pos)
+        .set_rot(bullet.transform.rot() + bullet.ang_speed*dt)
+        .update();
     }
-  });
+
+    float speed = 380.0f*dt;
+    if (win.get_key(shogle::key_l)) {
+      speed *= 0.66f;
+    }
+    vec2 vel {0.0f};
+    if (win.get_key(shogle::key_a)) {
+      vel.x = -1.0f;
+    } else if (win.get_key(shogle::key_d)) {
+      vel.x = 1.0f;
+    }
+    if (win.get_key(shogle::key_w)) {
+      vel.y = -1.0f;
+    } else if (win.get_key(shogle::key_s)) {
+      vel.y = 1.0f;
+    }
+    if (glm::length(vel) > 0) {
+      vel = speed*glm::normalize(vel);
+    }
+
+    player.transform.set_pos(player.transform.pos() + vel)
+      .update();
+
+    rin.transform.update();
+  };
 
   eng.set_viewport_event([&](size_t w, size_t h) {
     shogle::render_viewport(w, h);
     cam2d.set_viewport(w, h).update();
-    cam3d.set_viewport(w, h).update();
   });
 
   eng.set_key_event([&](shogle::keycode code, auto, shogle::keystate state, auto) {
     if (code == shogle::key_escape && state == shogle::press) {
-      eng.window().close();
+      eng.win().close();
+    }
+    if (code == shogle::key_k && state == shogle::press) {
+      for (auto& bullet : danmaku) {
+        bullet.del = true;
+      }
     }
   });
 
-  eng.start();
+  eng.start(60, on_render, on_fixed_update);
 }
 

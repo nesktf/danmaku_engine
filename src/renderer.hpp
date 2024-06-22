@@ -12,38 +12,47 @@
 
 namespace ntf {
 
+struct world_object {
+  world_object(shogle::sprite* sprite_) :
+    sprite(sprite_) {}
+  shogle::transform2d transform{};
+  shogle::sprite* sprite{};
+  color4 color{1.0f};
+  size_t index{0};
+  vec2 vel {0.0f};
+  bool del {false};
+  float ang_speed {0.0f};
+};
+
 class sprite_renderer {
 public:
-  sprite_renderer(shogle::sprite_shader& shader, shogle::sprite& sprite, shogle::quad& quad) :
-    _shader(shader), _sprite(sprite), _quad(quad) {}
+  sprite_renderer() = default;
 
 public:
-  void operator()(const shogle::camera2d& cam, const shogle::transform2d& transform, size_t index) {
+  void operator()(const shogle::camera2d& cam, const world_object& obj) {
     _shader.set_proj(cam.proj())
-      .set_view(mat4{1.0f})
-      .set_transform(transform.transf())
-      .set_color(color4{1.0f})
-      .set_tex_offset(_sprite.tex_offset(index))
-      .bind_texture(_sprite.tex())
+      .set_view(cam.view())
+      .set_transform(obj.transform.transf())
+      .set_color(obj.color)
+      .set_tex_offset(obj.sprite->tex_offset(obj.index))
+      .bind_texture(obj.sprite->tex())
       .draw(_quad.mesh());
   }
 
 private:
-  shogle::sprite_shader& _shader;
-  shogle::sprite& _sprite;
-  shogle::quad& _quad;
+  shogle::sprite_shader _shader{};
+  shogle::quad _quad{};
 };
 
 class model_renderer {
 public:
-  model_renderer(shogle::model_shader& shader, shogle::model& model) :
-    _shader(shader), _model(model) {}
+  model_renderer() = default;
 
 public:
-  void operator()(const shogle::camera3d& cam, const shogle::transform3d& transform) {
-    for (auto& mod_mesh : _model) {
+  void operator()(const shogle::camera3d& cam, const shogle::transform3d& transform, shogle::model& model) {
+    for (auto& mod_mesh : model) {
       _shader.set_proj(cam.proj())
-        .set_view(mat4{1.0f})
+        .set_view(cam.view())
         .set_model(transform.transf())
         .bind_diffuse(mod_mesh.find_material(shogle::material_type::diffuse))
         .draw(mod_mesh.mesh());
@@ -51,8 +60,18 @@ public:
   }
 
 private:
-  shogle::model_shader& _shader;
-  shogle::model& _model;
+  shogle::model_shader _shader{};
 };
+
+inline shogle::texture2d load_texture(std::string_view path) {
+  shogle::texture2d_loader loader{path};
+  return shogle::texture2d{
+    vec2sz{loader.width, loader.height},
+    loader.format,
+    shogle::tex_filter::nearest,
+    shogle::tex_wrap::repeat,
+    std::move(loader.pixels)
+  };
+}
 
 } // namespace ntf
