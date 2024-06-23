@@ -20,39 +20,66 @@ int main() {
     .set_zoom(1.0f);
   cam2d.update();
 
-  shogle::spritesheet hus_sheet{"res/spritesheets/2hus.json"};
+  shogle::tex_filter filter {shogle::tex_filter::nearest};
+  shogle::tex_wrap wrap {shogle::tex_wrap::repeat};
+
+  shogle::spritesheet hus_sheet = shogle::load_spritesheet("res/spritesheets/2hus.json", filter, wrap);
   shogle::sprite& rin_sprite = hus_sheet["rin_dance"];
 
-  shogle::spritesheet effects_sheet{"res/spritesheets/effects.json"};
+  shogle::spritesheet effects_sheet = shogle::load_spritesheet("res/spritesheets/effects.json", filter, wrap);
   shogle::sprite& star_sprite = effects_sheet["stars_big"];
   shogle::sprite& star_small_sprite = effects_sheet["stars_small"];
 
-  shogle::spritesheet chara_sheet{"res/spritesheets/chara.json"};
+  shogle::spritesheet chara_sheet = shogle::load_spritesheet("res/spritesheets/chara.json", filter, wrap);
   shogle::sprite& player_idle = chara_sheet["marisa_idle"];
   shogle::sprite& player_move = chara_sheet["marisa_move"];
 
   world_object rin {&rin_sprite};
   rin.transform.set_pos(0.0f, 0.0f)
     .set_rot(0.0f)
-    .set_scale(200.0f*rin_sprite.corrected_scale());
-  rin.transform.update();
+    .set_scale(200.0f*rin_sprite.corrected_scale())
+    .update();
 
   world_object player {&player_idle};
   player.transform.set_pos(0.0f, 0.0f)
     .set_rot(0.0f)
-    .set_scale(60.0f*player_idle.corrected_scale());
-  player.transform.update();
+    .set_scale(60.0f*player_idle.corrected_scale())
+    .update();
 
+  shogle::model fumo = shogle::load_model("res/models/cirno_fumo/cirno_fumo.obj", filter, wrap);
+  shogle::model_shader fumo_shader{};
+
+  shogle::transform3d fumo_transform{};
+  fumo_transform.set_pos(0.0f, -0.25f, -1.0f)
+    .set_scale(0.015f)
+    .update();
+
+  shogle::camera3d fumo_cam{eng.win().size()};
+  fumo_cam.set_pos(0.0f, 0.0f, 0.0f)
+    .set_dir(0.0f, 0.0f, -1.0f)
+    .update();
 
   auto on_render = [&](shogle::window& win, double dt, double alpha) {
     shogle::render_clear(color3{0.2f}, shogle::clear::depth);
+
+    shogle::render_depth_test(true);
+    for (const auto& [name, mesh] : fumo) {
+      fumo_shader.set_proj(fumo_cam.proj())
+        .set_view(mat4{1.0f})
+        .set_model(fumo_transform.transf())
+        .bind_diffuse(mesh[shogle::material_type::diffuse])
+        .draw(mesh.get_mesh());
+    }
+
+    shogle::render_depth_test(false);
     render_sprite(cam2d, rin);
     render_sprite(cam2d, player);
     for (auto& bullet : danmaku) {
       render_sprite(cam2d, bullet);
-    }
+    } 
+
     ImGui::Begin("dou");
-    ImGui::Text("fps: %f, alpha: %f", 1/dt, alpha);
+    ImGui::Text("fps: %f, alpha: %f, danmaku: %li", 1/dt, alpha, danmaku.size());
     ImGui::End();
   };
 
@@ -63,6 +90,9 @@ int main() {
     t += dt;
     t2 += dt;
     phase += dt*PI*0.25f;
+
+    fumo_transform.set_rot(fumo_transform.rot()*math::axisquat(PI*dt, vec3{0.0f,1.0f,0.0f}))
+      .update();
 
     for (auto& obj : new_danmaku) {
       danmaku.push_back(std::move(obj));
@@ -140,6 +170,7 @@ int main() {
   eng.set_viewport_event([&](size_t w, size_t h) {
     shogle::render_viewport(w, h);
     cam2d.set_viewport(w, h).update();
+    fumo_cam.set_viewport(w, h).update();
   });
 
   eng.set_key_event([&](shogle::keycode code, auto, shogle::keystate state, auto) {
