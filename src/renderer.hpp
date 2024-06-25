@@ -12,32 +12,14 @@
 
 namespace ntf {
 
-struct world_object {
-  world_object(shogle::sprite* sprite_) :
-    sprite(sprite_) {}
-  shogle::transform2d transform{};
-  shogle::sprite* sprite{};
-  color4 color{1.0f};
-  size_t index{0};
-  vec2 vel {0.0f};
-  bool del {false};
-  float ang_speed {0.0f};
-};
+struct entity2d;
 
 class sprite_renderer {
 public:
-  sprite_renderer() : _quad(shogle::load_quad(shogle::quad_type::normal2d)) {}
+  sprite_renderer();
 
 public:
-  void operator()(const shogle::camera2d& cam, const world_object& obj) {
-    _shader.set_proj(cam.proj())
-      .set_view(cam.view())
-      .set_transform(obj.transform.transf())
-      .set_color(obj.color)
-      .set_tex_offset(obj.sprite->tex_offset(obj.index))
-      .bind_texture(obj.sprite->tex())
-      .draw(_quad);
-  }
+  void operator()(const shogle::camera2d& cam, const entity2d& obj);
 
 private:
   shogle::mesh _quad{};
@@ -49,15 +31,7 @@ public:
   model_renderer() = default;
 
 public:
-  void operator()(const shogle::camera3d& cam, const shogle::transform3d& transform, shogle::model& model) {
-    for (auto& [name, tex_mesh] : model) {
-      _shader.set_proj(cam.proj())
-        .set_view(cam.view())
-        .set_model(transform.transf())
-        .bind_diffuse(tex_mesh[shogle::material_type::diffuse])
-        .draw(tex_mesh.get_mesh());
-    }
-  }
+  void operator()(const shogle::camera3d& cam, const shogle::transform3d& transform, shogle::model& model);
 
 private:
   shogle::model_shader _shader{};
