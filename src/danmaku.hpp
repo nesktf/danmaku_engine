@@ -1,27 +1,34 @@
 #pragma once
 
-#include "renderer.hpp"
+#include <shogle/shogle.hpp>
+#include <shogle/res/spritesheet.hpp>
+
+#include <shogle/res/shader/sprite.hpp>
+
 #include <cstdlib>
 
 namespace ntf {
 
-using pos_fun = vec2(*)(vec2, float, float);
-
-struct entity2d {
-public:
-  entity2d(shogle::sprite* sprite_) :
-    sprite(sprite_) {}
-
-public:
-  size_t index {0};
-  shogle::sprite* sprite{};
-  shogle::transform2d transform{};
-  vec2 initial_pos{};
-  color4 color {1.0f};
-  float t{};
-  float phase{};
-
-  pos_fun fun{};
-};
+inline void player_mover(shogle::window& win, shogle::transform2d& transform, float dt) {
+  float speed = 380.0f*dt;
+  if (win.get_key(shogle::key_l)) {
+    speed *= 0.66f;
+  }
+  vec2 vel {0.0f};
+  if (win.get_key(shogle::key_a)) {
+    vel.x = -1.0f;
+  } else if (win.get_key(shogle::key_d)) {
+    vel.x = 1.0f;
+  }
+  if (win.get_key(shogle::key_w)) {
+    vel.y = -1.0f;
+  } else if (win.get_key(shogle::key_s)) {
+    vel.y = 1.0f;
+  }
+  if (glm::length(vel) > 0) {
+    vel = speed*glm::normalize(vel);
+  }
+  transform.set_pos(transform.pos() + vel);
+}
 
 } // namespace ntf

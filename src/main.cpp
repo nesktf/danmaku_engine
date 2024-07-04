@@ -1,197 +1,213 @@
-#include "renderer.hpp"
+#include <shogle/shogle.hpp>
+
+#include <shogle/res/spritesheet.hpp>
+#include <shogle/res/model.hpp>
+
+#include <shogle/res/shader/sprite.hpp>
+#include <shogle/res/shader/model.hpp>
+
+#include <shogle/res/meshes.hpp>
 
 #include "danmaku.hpp"
 
 using namespace ntf;
 
+static cmplx defvel(float t, cmplx dir) { return cmplx{}; }
+
+struct bullet {
+  using velf = cmplx(*)(float,cmplx);
+
+  bullet(size_t index_, cmplx pos_, velf velfun_, cmplx dir_) :
+    index(index_), velfun(velfun_), dir(dir_) { transform.set_pos(pos_); }
+
+  size_t index;
+  velf velfun;
+  cmplx dir;
+
+  shogle::transform2d transform{};
+  float t{0.0f};
+  float state_t{0.0f};
+  int state{0};
+  int next_state{0};
+  bool expired{false};
+};
+
+class danmaku_spawner {
+public:
+  danmaku_spawner(shogle::sprite* sprite, size_t index, bullet::velf def_velfun = defvel) :
+    _sprite(sprite), _index(index), _def_velfun(def_velfun) {}
+
+public:
+  template<typename StatePred>
+  void update(float dt, StatePred&& state_pred) {
+    _t += dt;
+    shoot_angle += shoot_angle_speed*dt;
+
+    for (auto& bullet : _new_danmaku) {
+      _danmaku.emplace_back(std::move(bullet));
+    }
+    _new_danmaku.clear();
+
+    for (auto& bullet : _danmaku) {
+      bullet.t += dt;
+      bullet.state_t += dt;
+
+      state_pred(bullet);
+
+      if (bullet.state != bullet.next_state) {
+        bullet.state = bullet.next_state;
+        bullet.state_t = 0.0f;
+      }
+
+      auto& t = bullet.transform;
+      auto& v = bullet.velfun;
+      t.set_pos(t.cpos() + v(bullet.t, bullet.dir)*dt)
+        .set_rot(t.rot() + PI*dt)
+        .set_scale(40.0f);
+    }
+
+    std::erase_if(_danmaku, [](const auto& bullet) { return bullet.expired; });
+
+    if (_t > 1/rate) {
+      _t = 0.0f;
+
+      for (size_t i = 0; i < count; ++i) {
+        cmplx dir = math::expic(shoot_angle + (i*shoot_angle_spread));
+        cmplx p = pos + dir*cmplx{radius, 0.0f};
+        _new_danmaku.emplace_back(_index, p, _def_velfun, dir);
+      }
+    }
+  }
+
+  void render(shogle::sprite_shader& shader, const shogle::camera2d& cam, 
+              const shogle::mesh& quad) {
+    for (auto& bullet : _danmaku) {
+      shader.set_proj(cam.proj())
+        .set_view(cam.view())
+        .set_transform(bullet.transform.mat())
+        .set_color(color4{1.0f})
+        .set_tex_offset(_sprite->tex_offset(bullet.index))
+        .bind_texture(_sprite->tex())
+        .draw(quad);
+    }
+  }
+
+public:
+  size_t size() const { return _danmaku.size(); }
+
+  void clear() { _danmaku.clear(); }
+
+public:
+  cmplx pos{0.0f};
+
+  float rate {1.0f};
+  float shoot_angle {0.0f};
+  float shoot_angle_spread {0.0f};
+  float shoot_angle_speed {0.0f};
+  float radius{0.0f};
+
+  size_t count {1};
+
+private:
+  shogle::sprite* _sprite;
+  size_t _index;
+  bullet::velf _def_velfun;
+
+  std::vector<bullet> _danmaku;
+  std::vector<bullet> _new_danmaku;
+  float _t{0.0f};
+};
+
 int main() {
   log::set_level(loglevel::verbose);
+
   shogle::engine eng{1024, 768, "test"};
   eng.win().use_vsync(false);
   shogle::render_blending(true);
 
-  sprite_renderer render_sprite{};
-
-  pair_vector<bool, entity2d> danmaku;
-  pair_vector<bool, entity2d> new_danmaku;
+  auto quad = shogle::load_quad(shogle::quad_type::normal2d);
+  shogle::sprite_shader sprite_shader{};
 
   shogle::camera2d cam2d{eng.win().size()};
   cam2d.set_pos(0.0f, 0.0f)
     .set_rot(0.0f)
-    .set_zoom(1.0f);
-  cam2d.update();
-
-  shogle::tex_filter filter {shogle::tex_filter::nearest};
-  shogle::tex_wrap wrap {shogle::tex_wrap::repeat};
-
-  shogle::spritesheet hus_sheet = shogle::load_spritesheet("res/spritesheets/2hus.json", filter, wrap);
-  shogle::sprite& rin_sprite = hus_sheet["rin_dance"];
-
-  shogle::spritesheet effects_sheet = shogle::load_spritesheet("res/spritesheets/effects.json", filter, wrap);
-  shogle::sprite& star_sprite = effects_sheet["stars_big"];
-  shogle::sprite& star_small_sprite = effects_sheet["stars_small"];
-
-  shogle::spritesheet chara_sheet = shogle::load_spritesheet("res/spritesheets/chara.json", filter, wrap);
-  shogle::sprite& player_idle = chara_sheet["marisa_idle"];
-  shogle::sprite& player_move = chara_sheet["marisa_move"];
-
-  entity2d rin {&rin_sprite};
-  rin.transform.set_pos(0.0f, 0.0f)
-    .set_rot(0.0f)
-    .set_scale(200.0f*rin_sprite.corrected_scale())
+    .set_zoom(1.0f)
     .update();
 
-  entity2d player {&player_idle};
-  player.transform.set_pos(0.0f, 0.0f)
-    .set_rot(0.0f)
-    .set_scale(60.0f*player_idle.corrected_scale())
-    .update();
+  auto filter = shogle::tex_filter::nearest;
+  auto wrap = shogle::tex_wrap::repeat;
 
-  shogle::model fumo = shogle::load_model("res/models/cirno_fumo/cirno_fumo.obj", filter, wrap);
-  shogle::model_shader fumo_shader{};
+  auto effects_sheet = shogle::load_spritesheet("res/spritesheets/effects.json", filter, wrap);
+  auto& star_sprite = effects_sheet["stars_big"];
 
-  shogle::transform3d fumo_transform{};
-  fumo_transform.set_pos(0.0f, -0.25f, -1.0f)
-    .set_scale(0.015f)
-    .update();
+  danmaku_spawner danmaku {&star_sprite, 0};
+  danmaku.radius = 100.0f;
+  danmaku.rate = 10.0f;
+  danmaku.shoot_angle_spread = PI*0.25f;
+  danmaku.shoot_angle_speed = PI*0.25f;
+  danmaku.count = 8;
 
-  shogle::camera3d fumo_cam{eng.win().size()};
-  fumo_cam.set_pos(0.0f, 0.0f, 0.0f)
-    .set_dir(0.0f, 0.0f, -1.0f)
-    .update();
+  auto on_render = [&](shogle::window& win, double dt, double fixed_dt, double alpha) {
+    shogle::render_clear(color3{0.2f});
 
-  auto on_render = [&](shogle::window& win, double dt, double alpha) {
-    shogle::render_clear(color3{0.2f}, shogle::clear::depth);
+    danmaku.render(sprite_shader, cam2d, quad);
 
-    shogle::render_depth_test(true);
-    for (const auto& [name, mesh] : fumo) {
-      fumo_shader.set_proj(fumo_cam.proj())
-        .set_view(mat4{1.0f})
-        .set_transform(fumo_transform.mat())
-        .bind_diffuse(mesh[shogle::material_type::diffuse])
-        .draw(mesh.get_mesh());
-    }
-
-    shogle::render_depth_test(false);
-    render_sprite(cam2d, player);
-    for (auto& [flag, bullet] : danmaku) {
-      render_sprite(cam2d, bullet);
-    } 
-    render_sprite(cam2d, rin);
-
-    ImGui::Begin("dou");
+    ImGui::Begin("info");
     ImGui::Text("fps: %f, alpha: %f, danmaku: %li", 1/dt, alpha, danmaku.size());
     ImGui::End();
   };
 
+  vec2 player_pos {0.0f, 0.0f};
+
   float t = 0.0f;
-  float t2 = 0.0f;
-  // float t3 = 0.0f;
   auto on_fixed_update = [&](shogle::window& win, double dt) {
-    t += dt;
-    t2 += dt;
-    // t3 += dt;
+    enum state : int {
+      STATE_INIT = 0,
+      STATE_MOVING,
+      STATE_RETURNING,
+    };
 
-    if (t2 > 1/10.0f) {
-      rin.index++;
-      player.index++;
-      size_t count = 16;
-      for (size_t i = 0; i < count; ++i) {
-        float phase = i*2*PI/count;
-        auto test = entity2d{&star_sprite};
-        test.transform.set_pos(rin.transform.pos())
-          .set_scale(40.0f);
-        test.initial_pos = rin.transform.pos();
-        test.phase = phase;
-        test.index = rand() % 10;
-        test.fun = [](vec2 initial_pos, float phase, float t) -> vec2 {
-          float speed = 250.0f;
-          // cmplx fun = t*50.f*cmplx{glm::cos(t), glm::sin(t)};
-          // cmplx fun = math::expic(phase)*cmplx{speed*t, 50.0f*glm::sin(t*PI)};
-          cmplx fun = math::expic(phase+t)*cmplx{speed*t, 100.0f*glm::log(.082f+t/8)};
-          return initial_pos + vec2{fun.real(), fun.imag()};
-        };
-        test.transform.update();
-        new_danmaku.push_back(std::make_pair(false, std::move(test)));
+    t+=dt;
+    danmaku.pos = cmplx{0.0f, 0.0f} + 200.0f*math::expic(2*PI*t);
+
+    danmaku.update(dt, [&](bullet& bullet) {
+      float limit {1000.0f};
+      auto pos {bullet.transform.pos()};
+      if (pos.x > limit || pos.x < -limit || pos.y > limit || pos.y < -limit) {
+        bullet.expired = true;
+        return;
       }
 
-      t2 = 0.0f;
-    }
-
-    // if (t3 > 1/2.0f) {
-    //   size_t count = 16;
-    //   for (size_t i = 0; i < count; ++i) {
-    //     float phase = i*2*PI/count;
-    //     auto p1 = player.transform.cpos()+200.0f*math::expic(phase);
-    //     auto test = entity2d{&star_sprite};
-    //     test.initial_pos = {p1.real(), p1.imag()};
-    //     test.transform.set_pos(p1)
-    //       .set_scale(40.0f)
-    //       .update();
-    //     test.phase = phase;
-    //     test.index = rand() % 10;
-    //     test.fun = [](vec2 initial_pos, float phase, float t) -> vec2 {
-    //       float speed = 250.0f;
-    //       cmplx fun = math::expic(t+phase)*cmplx{speed*t, 1.0f};
-    //       return initial_pos - vec2{fun.real(), fun.imag()};
-    //     };
-    //     new_danmaku.push_back(std::make_pair(false, std::move(test)));
-    //   }
-    //   t3 = 0.0f;
-    // }
-
-    fumo_transform.set_rot(fumo_transform.rot()*math::axisquat(PI*dt, vec3{0.0f,1.0f,0.0f}))
-      .update();
-
-    for (auto& obj : new_danmaku) {
-      danmaku.push_back(std::move(obj));
-    }
-    new_danmaku.clear();
-
-    std::erase_if(danmaku, [](const auto& bullet) { return bullet.first; });
-
-
-    for (auto& [flag, bullet] : danmaku) {
-      auto pos = bullet.transform.pos();
-      bullet.t += dt;
-      bullet.transform.set_pos(bullet.fun(bullet.initial_pos, bullet.phase, bullet.t))
-        .set_rot(PI*bullet.t)
-        .update();
-
-      if (pos.x > 1000.0f || pos.x < -1000.0f || pos.y > 1000.0f || pos.y < -1000.0f) {
-        flag = true;
+      switch (bullet.state) {
+        case STATE_INIT: {
+          bullet.velfun = [](float t, cmplx dir) -> cmplx {
+            float s = 200.0f;
+            return math::expic(PI*0.25+t)*dir*s*cmplx{1/(t+1), t+3.5f};
+            // return init + math::expic(t)*dir*cmplx{speed*t, radius*glm::log(.082f+t/8)};
+          };
+          bullet.next_state = STATE_MOVING;
+          break;
+        }
+        case STATE_MOVING: {
+          if (bullet.state_t > 1.0f) {
+            bullet.index++;
+            vec2 d = glm::normalize(player_pos-bullet.transform.pos());
+            bullet.dir = cmplx{d.x, d.y};
+            bullet.velfun = [](float t, cmplx dir) -> cmplx {
+              return dir*cmplx{5.0f*t};
+            };
+            // bullet.dir *= math::expic(PI*0.5f);
+            bullet.next_state = STATE_RETURNING;
+          }
+        }
+        default: break;
       }
-    }
-
-    float speed = 380.0f*dt;
-    if (win.get_key(shogle::key_l)) {
-      speed *= 0.66f;
-    }
-    vec2 vel {0.0f};
-    if (win.get_key(shogle::key_a)) {
-      vel.x = -1.0f;
-    } else if (win.get_key(shogle::key_d)) {
-      vel.x = 1.0f;
-    }
-    if (win.get_key(shogle::key_w)) {
-      vel.y = -1.0f;
-    } else if (win.get_key(shogle::key_s)) {
-      vel.y = 1.0f;
-    }
-    if (glm::length(vel) > 0) {
-      vel = speed*glm::normalize(vel);
-    }
-
-    player.transform.set_pos(player.transform.pos() + vel)
-      .update();
-
-    rin.transform.update();
+    });
   };
 
   eng.set_viewport_event([&](size_t w, size_t h) {
     shogle::render_viewport(w, h);
     cam2d.set_viewport(w, h).update();
-    fumo_cam.set_viewport(w, h).update();
   });
 
   eng.set_key_event([&](shogle::keycode code, auto, shogle::keystate state, auto) {
@@ -199,10 +215,15 @@ int main() {
       eng.win().close();
     }
     if (code == shogle::key_k && state == shogle::press) {
-      for (auto& [flag, bullet] : danmaku) {
-        flag = true;
-      }
+      danmaku.clear();
     }
+    if (code == shogle::key_j && state == shogle::press) {
+      cam2d.set_zoom(cam2d.zoom()+0.1f);
+    }
+    if (code == shogle::key_l && state == shogle::press) {
+      cam2d.set_zoom(cam2d.zoom()-0.1f);
+    }
+    cam2d.update();
   });
 
   eng.start(60, on_render, on_fixed_update);
