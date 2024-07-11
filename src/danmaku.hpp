@@ -70,19 +70,6 @@ public:
     std::erase_if(_danmaku, [](const auto& bullet) { return bullet.expired; });
   }
 
-  void render(shogle::sprite_shader& shader, const shogle::camera2d& cam) {
-    for (auto& bullet : _danmaku) {
-      shader.enable()
-        .set_proj(cam.proj())
-        .set_view(cam.view())
-        .set_transform(bullet.transform.mat())
-        .set_color(color4{1.0f})
-        .set_tex_offset(_sprite->tex_offset(bullet.index))
-        .bind_texture(_sprite->tex());
-      shogle::render_draw_quad();
-    }
-  }
-
 public:
   size_t size() const { return _danmaku.size(); }
 
@@ -107,29 +94,5 @@ private:
   std::vector<bullet> _danmaku;
   float _t{0.0f};
 };
-
-
-
-// inline void player_mover(shogle::transform2d& transform, float dt) {
-//   float speed = 380.0f*dt;
-//   if (win.get_key(shogle::key_l)) {
-//     speed *= 0.66f;
-//   }
-//   vec2 vel {0.0f};
-//   if (win.get_key(shogle::key_a)) {
-//     vel.x = -1.0f;
-//   } else if (win.get_key(shogle::key_d)) {
-//     vel.x = 1.0f;
-//   }
-//   if (win.get_key(shogle::key_w)) {
-//     vel.y = -1.0f;
-//   } else if (win.get_key(shogle::key_s)) {
-//     vel.y = 1.0f;
-//   }
-//   if (glm::length(vel) > 0) {
-//     vel = speed*glm::normalize(vel);
-//   }
-//   transform.set_pos(transform.pos() + vel);
-// }
 
 } // namespace ntf
