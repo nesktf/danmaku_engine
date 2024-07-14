@@ -1,30 +1,30 @@
 #pragma once
-//
-// #include <shogle/shogle.hpp>
-//
-// #include <shogle/res/spritesheet.hpp>
-// #include <shogle/res/font.hpp>
-//
-// namespace ntf::game {
-//
-// template<typename T>
-// using str_map = std::unordered_map<std::string, T>;
-//
-// struct state {
-//   ntf::shogle::camera2d cam{vec2{1.0f}};
-//   struct {
-//     int sprite_state{0};
-//     vec2 speed{};
-//     shogle::transform2d transform;
-//   } player;
-// };
-//
-// struct res {
-//   str_map<shogle::spritesheet> spritesheets;
-//   str_map<shogle::font> fonts;
-// };
-//
-// extern state& global_state;
-// extern res& resources;
-//
-// }
+
+#include <shogle/render/framebuffer.hpp>
+#include <shogle/res/spritesheet.hpp>
+#include <shogle/res/font.hpp>
+
+#include <shogle/scene/camera.hpp>
+
+#include "player.hpp"
+#include "level.hpp"
+
+namespace ntf::game {
+
+struct res {
+  std::unordered_map<std::string, shogle::spritesheet> spritesheets;
+  std::unordered_map<std::string, shogle::font> fonts;
+};
+
+extern res& resources;
+
+struct game_state {
+  shogle::camera2d camera{vec2{1.0f}};
+  player_state player;
+  uptr<level> curr_level;
+  uptr<shogle::framebuffer> level_fbo;
+};
+
+extern game_state& state;
+
+}

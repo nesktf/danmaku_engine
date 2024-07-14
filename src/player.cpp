@@ -1,45 +1,63 @@
-// #include "player.hpp"
-//
-// namespace ntf::game {
-//
-// class movement_component : public component {
-// public:
-//   movement_component(sprite_component* sprite) :
-//     _sprite(sprite) {}
-//
-// public:
-//   void on_tick(float dt) override {
-//
-//     float speed = 380.0f;
-//     if (shogle::engine_poll_key(shogle::key_l)) {
-//       speed *= 0.66f;
-//     }
-//
-//     vec2 vel {0.0f};
-//     if (shogle::engine_poll_key(shogle::key_a)) {
-//       vel.x = -1.0f;
-//     } else if (shogle::engine_poll_key(shogle::key_d)) {
-//       vel.x = 1.0f;
-//     }
-//     if (shogle::engine_poll_key(shogle::key_w)) {
-//       vel.y = -1.0f;
-//     } else if (shogle::engine_poll_key(shogle::key_s)) {
-//       vel.y = 1.0f;
-//     }
-//     if (glm::length(vel) > 0) {
-//       vel = speed*glm::normalize(vel);
-//     }
-//     _sprite->_vel = vel;
-//   }
-//
-// public:
-//   sprite_component* _sprite;
-// };
-//
-// player::player(shogle::sprite* sprite) {
-//   auto* spr = components.emplace(sprite_component{sprite, color4{1.0f}, 0});
-//   spr->_transform.set_scale(spr->_sprite->corrected_scale()*50.0f);
-//   components.emplace(movement_component{spr});
-// }
-//
-// } // namespace ntf::game
+#include "player.hpp"
+#include "render.hpp"
+#include "state.hpp"
+
+#include <shogle/shogle.hpp>
+
+namespace ntf::game {
+
+static float sqlen(const vec2& vec) {
+  return (vec.x*vec.x) + (vec.y*vec.y);
+}
+
+player_state::player_state() {}
+
+void player_state::set_sprite(shogle::sprite* sprite, shogle::sprite* hitbox) {
+  _hitbox = hitbox;
+  _sprite = sprite;
+
+  _transf.set_scale(base_scale*sprite->corrected_scale());
+  _hitbox_transform.set_scale(base_scale*_hitbox->corrected_scale());
+}
+
+void player_state::render() {
+  render_sprite(*_sprite, _transf, 0);
+  if (_shifting) {
+    render_sprite(*_hitbox, _hitbox_transform, 0);
+  }
+}
+
+void player_state::tick(float dt) {
+  _shifting = false;
+
+  float speed = 380.0f;
+  if (shogle::engine_poll_key(shogle::key_l)) {
+    speed *= 0.66f;
+    _shifting = true;
+  }
+
+  vec2 vel{};
+  if (shogle::engine_poll_key(shogle::key_a)) {
+    vel.x = -1.0f;
+  } else if (shogle::engine_poll_key(shogle::key_d)) {
+    vel.x = 1.0f;
+  }
+  if (shogle::engine_poll_key(shogle::key_w)) {
+    vel.y = -1.0f;
+  } else if (shogle::engine_poll_key(shogle::key_s)) {
+    vel.y = 1.0f;
+  }
+
+  if (sqlen(vel) > 0) {
+    vel = glm::normalize(vel);
+  }
+
+  _transf.set_pos(_transf.pos() + vel*speed*dt);
+  if (_shifting) {
+    _hitbox_transform.set_pos(_transf.pos())
+      .set_rot(_hitbox_transform.rot() + PI*0.25f*dt);
+  }
+  // state.camera.set_pos(_transf.pos()).update();
+}
+
+}
