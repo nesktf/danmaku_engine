@@ -1,0 +1,84 @@
+{
+  "file": "effects.png",
+  "content": [
+    {
+      "name": "stars_big",
+      "offset": {
+        "count": 8,
+        "cols": 8,
+        "x0": 7,
+        "y0": 272,
+        "dx": 256,
+        "dy": 32
+      },
+      "anim": []
+    },
+    {
+      "name": "stars_small",
+      "offset": {
+        "count": 16,
+        "cols": 16,
+        "x0": 7,
+        "y0": 305,
+        "dx": 256,
+        "dy": 16
+      },
+      "anim": [
+        {
+          "name": "test",
+          "delay": 60,
+          "sequence": [0, 1]
+        }
+      ]
+    },
+    {
+      "name": "bubbles",
+      "offset": {
+        "count": 4,
+        "cols": 4,
+        "x0": 280,
+        "y0": 5,
+        "dx": 256,
+        "dy": 64
+      },
+      "anim": []
+    },
+    {
+      "name": "pentagram",
+      "offset": {
+        "count": 2,
+        "cols": 2,
+        "x0": 409,
+        "y0": 118,
+        "dx": 128,
+        "dy": 64
+      },
+      "anim": []
+    },
+    {
+      "name": "hitbox",
+      "offset": {
+        "count": 2,
+        "cols": 2,
+        "x0": 280,
+        "y0": 117,
+        "dx": 128,
+        "dy": 64
+      },
+      "anim": []
+    },
+    {
+      "name": "laser",
+      "offset": {
+        "count": 16,
+        "cols": 16,
+        "x0": 10,
+        "y0": 4,
+        "dx": 256,
+        "dy": 16
+      },
+      "anim": []
+    }
+  ]
+}
+

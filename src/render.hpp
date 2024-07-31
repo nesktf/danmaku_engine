@@ -1,11 +1,12 @@
 #pragma once
 
-#include <shogle/core/types.hpp>
+#include "core.hpp"
 
-namespace ntf {
+namespace render {
 
-void render_init();
-void render_new_frame(double dt, double alpha);
-void render_update_viewport(size_t w, size_t h);
+void init();
+void post_init();
+void destroy();
+void draw(double dt, double alpha);
 
-} // namespace ntf
+}

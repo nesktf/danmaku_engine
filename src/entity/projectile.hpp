@@ -1,25 +1,23 @@
 #pragma once
 
-#include <shogle/scene/transform.hpp>
-
 #include "entity/movement.hpp"
-#include "entity/animator.hpp"
 
-namespace ntf {
+#include <shogle/res/spritesheet.hpp>
+
+namespace entity {
 
 class projectile {
 public:
-  projectile(const shogle::sprite* sprite_, entity_movement movement_);
+  projectile(ntf::shogle::sprite sprite_, movement movement_, uint birth_);
 
 public:
   void tick();
 
 public:
-  shogle::transform2d& transf() { return transform; }
-
-private:
-  shogle::transform2d transform;
-  entity_movement movement;
+  uint birth;
+  ntf::shogle::sprite sprite;
+  transform2d transform;
+  movement move;
 };
 
-} // namespace ntf::game
+} // namespace entity

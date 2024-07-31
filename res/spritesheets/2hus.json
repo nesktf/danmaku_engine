@@ -1,0 +1,24 @@
+{
+  "file": "2hus.png",
+  "content": [
+    {
+      "name": "cirno_fall",
+      "count": 15,
+      "cols": 8,
+      "x0": 0,
+      "y0": 0,
+      "dx": 2944,
+      "dy": 798
+    },
+    {
+      "name": "rin_dance",
+      "count": 6,
+      "cols": 6,
+      "x0": 0,
+      "y0": 798,
+      "dx": 1680,
+      "dy": 440
+    }
+  ]
+}
+

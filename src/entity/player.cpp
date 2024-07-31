@@ -1,4 +1,14 @@
-// #include "player.hpp"
+#include "player.hpp"
+#include "input.hpp"
+
+namespace entity {
+
+void player::tick() {
+
+}
+
+} // namespace entity
+
 // #include "render.hpp"
 // #include "state.hpp"
 //

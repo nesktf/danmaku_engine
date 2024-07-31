@@ -1,30 +1,28 @@
 #include <shogle/shogle.hpp>
 
-#include "global.hpp"
+#include "core.hpp"
 #include "resources.hpp"
 #include "render.hpp"
 #include "stage.hpp"
+#include "input.hpp"
 
-using namespace ntf;
+static void destroy();
 
-static ntf::cleanup _ {[]{shogle::engine_destroy();}};
+static ntf::cleanup _ {[]{destroy();}};
 
 int main() {
-  log::set_level(loglevel::verbose);
-  shogle::engine_init(WIN_SIZE.x, WIN_SIZE.y, "test");
+  ntf::log::set_level(ntf::loglevel::verbose);
 
-  resources_init();
-  global_init();
-  render_init();
-  stage_init();
+  render::init();
+  res::init();
+  stage::init();
+  input::init();
 
-  shogle::engine_viewport_event(render_update_viewport);
-  shogle::engine_key_event([](shogle::keycode code, auto, shogle::keystate state, auto) {
-    if (code == shogle::key_escape && state == shogle::press) {
-      shogle::engine_close_window();
-    }
-  });
+  render::post_init();
 
-  shogle::engine_main_loop(UPS, render_new_frame, stage_next_tick);
+  ntf::shogle::engine_main_loop(UPS, render::draw, stage::tick);
 }
 
+static void destroy() {
+  render::destroy();
+}

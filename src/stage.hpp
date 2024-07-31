@@ -1,8 +1,16 @@
 #pragma once
 
-namespace ntf {
+#include "core.hpp"
 
-void stage_init();
-void stage_next_tick();
+#include "entity/projectile.hpp"
+#include "entity/player.hpp"
 
-} // namespace ntf
+namespace stage {
+
+void init();
+void tick();
+
+vector<entity::projectile>& projectiles();
+entity::player& player();
+
+} // namespace stage

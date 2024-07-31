@@ -2,9 +2,9 @@
 
 #include "math.hpp"
 
-namespace ntf {
+namespace entity {
 
-class entity_movement {
+class movement {
 public:
   cmplx operator()(cmplx& pos) {
     const auto v0 = velocity;
@@ -42,16 +42,16 @@ public:
   float attraction_exponent{};
 };
 
-inline entity_movement move_linear(cmplx vel) {
-  return entity_movement {
+inline movement move_linear(cmplx vel) {
+  return movement {
     .velocity = vel,
     .acceleration = 0,
     .retention = 1,
   };
 }
 
-inline entity_movement move_towards(cmplx target, cmplx vel, cmplx att) {
-  return entity_movement {
+inline movement move_towards(cmplx target, cmplx vel, cmplx att) {
+  return movement {
     .velocity = vel,
     .attraction = att,
     .attraction_point = target,
@@ -59,20 +59,20 @@ inline entity_movement move_towards(cmplx target, cmplx vel, cmplx att) {
   };
 }
 
-inline entity_movement move_interpolate(cmplx vel0, cmplx vel1, float ret) {
-  return entity_movement {
+inline movement move_interpolate(cmplx vel0, cmplx vel1, float ret) {
+  return movement {
     .velocity = vel0,
     .acceleration = vel1*(1-ret),
     .retention = ret,
   };
 }
 
-inline entity_movement move_interpolate_halflife(cmplx vel0, cmplx vel1, float hl) {
+inline movement move_interpolate_halflife(cmplx vel0, cmplx vel1, float hl) {
   return move_interpolate(vel0, vel1, std::exp2(-1.f/hl));
 }
 
-inline entity_movement move_interpolate_simple(cmplx vel, float boost) {
+inline movement move_interpolate_simple(cmplx vel, float boost) {
   return move_interpolate(vel*(1+boost), vel, 0.8f);
 }
 
-} // namespace ntf
+} // namespace entity

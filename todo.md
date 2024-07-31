@@ -1,5 +1,6 @@
 # Game ideas
-- fumo racing
+- fumo racing (3d)
+- maincra clone
 - 2hu clone
 - sonic clone
 
@@ -187,6 +188,81 @@ Ahora, a partir de lo pre-establecido, voy a establecer un plan inicial para
 implementar este jueguito. Siento que dividirlo en fases es lo mejor (?)
 
 #### Fase 1: Render y recursos
+Para empezar tengo que considerar como renderizar todas las cosas que tenga el juego. En general
+se reduce en el 90% de los casos a solo renderizar un quad con una textura, y en algunos casos
+aplicar un shader al mismo. Existen escenarios 3D que renderizar (el fondo y tal vez un modelo
+enemigo), pero son lo de menos.
+
+Siento que la mejor forma es mantener las entidades en un lugar predeterminado e iterarlos cada
+vez que se los renderiza. Osea mantener un estado global de render para manejar todo.
+
+Puedo hacer esto de unas cuantas formas, a continuación las mencino:
+- Mantener una lista global de cada tipo de entidad
+- Usar objetos por stage que mantengan las listas de entidades
+
+Para el primer caso se simplifica el manejo de entidades por tick, puesto que se mantiene
+una lista global que se puede acceder desde cualquier lado, y desde otras entidades no solo
+desde el render. La desventaja principal es que hay que realizar una limpieza un poco mas
+minuciosa cada vez que se termina un nivel, y si no se maneja correctamente las entidades pueden
+manejarse de forma impredecible
+
+En el segundo caso se soluciona la limpieza de entidades mediante RAII, y las entidades están
+un poco mejor protegidas de manipulaciones externas. La desventaja esta en la preparación del
+objeto para ser accedido por el render, que a su vez se expande en la modificación del estado
+de las entidades por parte de terceros
+
+Por esto entones voy a elegir la ***primer opcion***
+
+Ahora, lo siguiente tiene que ver con los shaders. Ahora mismo no tengo idea de que tipo
+de efectos pueda tener en el juego. Posiblemente deje algún lugar en el render principal
+para administrar shaders de alguna forma. Es posible que necesite mutar los objetos para
+soportar shaders pero veremos que tal cuando llegue el momento. De toda manera no creo
+que sea muy dificil hacer efectos con shaders ahora que lo pienso? Por lo que tengo entendido
+simplemente se resume en tener el programa feo en la GPU y enviar los datos mediante uniforms.
+Probablemente no necesite comerme la cabeza mucho con esto.
+
+En cuanto a recursos necesarios en el juego tengo la siguiente lista:
+- Gráficos (sprites)
+- Audio (efectos de sonido & musica)
+- Fuentes (texto)
+- Scripts & Shaders
+
+La idea es presentar una API para administrar estos recursos en Lua. No creo que tengan mucho
+problema para cada uno, lo unico que no estoy totalmente seguro de como manejar son los sprites
+y sus animaciones.
+
+Actualmente tengo un sistema de spritesheets que carga un archivo json que describe un área con
+sprites en una imágen y las propiedades necesarias para renderizarlos (offsets y escala para 
+el quad). Estos sprites son cargados en un map.
+
+Lo que tengo que considerar es la posibilidad de tener sprites estáticos y animados en la misma
+spritesheet. Actualmente la spritesheet simplementa carga un área con $n$ sprites distribuidos en
+$k$ columnas. No puedo decidirme si mantener los sprites estáticos en un sprite aparte dentro de la
+spritesheet y mutar el sprite de un objeto, o cargar todos los sprites relacionados en un mismo
+sprite y manejarlos mediante un índice.
+
+La primer forma simplificaria las animaciones, pero crearía writes innecesarios, haría que la
+spritesheet sea más grande y tal vez complique la interpolación en el render???
+
+La segunda forma es más eficiente pero requiere crear un sistema especial para manejar los sprites
+animados y estáticos. Podria requerir definir en el json un conjunto de animaciones o algo??
+
+Ahora que lo pienso la segunda forma puede ser interesante, en vez de definir las animaciones en
+código simplemente puedo ponerlas en el json y parsearlo luego, y creando alguna clase que los
+maneje, con tal de no complicarme a la hora de correr el juego y simplemente traer una animación
+desde un map
+
+Listo, haré eso. No es necesario modificar mucho el loader tampoco. Simplemente necesito añadir
+el campo de delay en cada objeto del json y modificar la clase sprite para animar el sprite
+en un loop, animarlo hasta terminar o simplemente no animar nada.
+
+En vez de utilizar un map con sprites en el spritesheet, simplemente tengo el contenedor con
+los datos de sprite y brindo un "sprite" mutable con los datos necesarios para animar el sprite.
+Osea mando un handle con algun animator bindeado y yata
+
+Creo que con eso es suficiente para manejar el render. Para el caso del viewport del juego ya
+tengo los framebuffers listos para administrarlo. Quedaría hacer una limpieza y dejarlo bonito
+porque ahora mismo es un pedazo de aca semi-legible
 
 #### Fase 2: Lógica del juego
 

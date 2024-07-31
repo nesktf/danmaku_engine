@@ -1,9 +1,11 @@
 #pragma once
 
-namespace ntf {
+#include "core.hpp"
+
+namespace entity {
 
 class boss {
 
 };
 
-} // namespace ntf::game
+} // namespace entity

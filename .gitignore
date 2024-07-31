@@ -1,4 +1,5 @@
 .cache/
-res/
 build*
 imgui.ini
+res/_temp/
+res/fonts/
