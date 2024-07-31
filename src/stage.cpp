@@ -22,7 +22,7 @@ entity::player& stage::player() {
   return state.player;
 }
 
-static const char* script_path = "script/test_level.lua";
+static const char* script_path = "res/script/test_level.lua";
 
 void stage::init() {
   auto& lua = state.lua;

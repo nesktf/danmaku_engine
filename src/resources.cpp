@@ -28,11 +28,11 @@ static ntf::shogle::shader_program load_shader(std::string_view vert_path, std::
 static void load_shaders() {
   auto& shaders = resources.shaders;
   shaders.emplace(std::make_pair("sprite", 
-    load_shader("res/shaders/sprite.vs.glsl", "res/shaders/sprite.fs.glsl")));
+    load_shader("res/shader/sprite.vs.glsl", "res/shader/sprite.fs.glsl")));
   shaders.emplace(std::make_pair("font", 
-    load_shader("res/shaders/font.vs.glsl", "res/shaders/font.fs.glsl")));
+    load_shader("res/shader/font.vs.glsl", "res/shader/font.fs.glsl")));
   shaders.emplace(std::make_pair("framebuffer", 
-    load_shader("res/shaders/framebuffer.vs.glsl", "res/shaders/framebuffer.fs.glsl")));
+    load_shader("res/shader/framebuffer.vs.glsl", "res/shader/framebuffer.fs.glsl")));
 }
 
 static void load_fonts() {
@@ -45,11 +45,11 @@ static void load_sprites() {
   auto wrap   = ntf::shogle::tex_wrap::repeat;
 
   sprites.emplace(std::make_pair("enemies", 
-    ntf::shogle::load_spritesheet("res/spritesheets/enemies.json", filter, wrap)));
+    ntf::shogle::load_spritesheet("res/spritesheet/enemies.json", filter, wrap)));
   sprites.emplace(std::make_pair("effects", 
-    ntf::shogle::load_spritesheet("res/spritesheets/effects.json", filter, wrap)));
+    ntf::shogle::load_spritesheet("res/spritesheet/effects.json", filter, wrap)));
   sprites.emplace(std::make_pair("chara", 
-    ntf::shogle::load_spritesheet("res/spritesheets/chara.json", filter, wrap)));
+    ntf::shogle::load_spritesheet("res/spritesheet/chara.json", filter, wrap)));
 }
 
 void res::init() {
