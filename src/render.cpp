@@ -1,6 +1,6 @@
+#include "global.hpp"
 #include "render.hpp"
 #include "resources.hpp"
-#include "stage.hpp"
 
 static struct {
   mat4 proj;
@@ -91,12 +91,12 @@ static void draw_sprite(const ntf::shogle::sprite& sprite, transform2d& transfor
 }
 
 static void draw_player() {
-  auto& player = stage::player();
+  auto& player = global::state().stage.player;
   draw_sprite(player.spr, player.transform(), color4{1.0f});
 }
 
 static void draw_boss() {
-  auto& boss = stage::boss();
+  auto& boss = global::state().stage.boss;
 
   if (!boss.ready()) {
     return;
@@ -106,7 +106,7 @@ static void draw_boss() {
 }
 
 static void draw_stage() {
-  for (auto& bullet : stage::projectiles()) {
+  for (auto& bullet : global::state().stage.projectiles) {
     const auto& sprite = bullet.sprite;
     auto& transform = bullet.transform;
     draw_sprite(sprite, transform, color4{1.0f});
