@@ -92,8 +92,17 @@ static void draw_sprite(const ntf::shogle::sprite& sprite, transform2d& transfor
 
 static void draw_player() {
   auto& player = stage::player();
-  auto& transform = player.transform;
-  // draw_sprite(player.sprite, transform, color4{1.0f});
+  draw_sprite(player.spr, player.transform(), color4{1.0f});
+}
+
+static void draw_boss() {
+  auto& boss = stage::boss();
+
+  if (!boss.ready()) {
+    return;
+  }
+
+  draw_sprite(boss.spr(), boss.transform(), color4{1.0f});
 }
 
 static void draw_stage() {
@@ -126,6 +135,7 @@ void render::draw(double dt, double alpha) {
   const auto& wsz = window.size;
   stage_viewport.viewport.bind(wsz.x, wsz.y, [](){
     ntf::shogle::render_clear(color3{0.3f});
+    draw_boss();
     draw_player();
     draw_stage();
   });

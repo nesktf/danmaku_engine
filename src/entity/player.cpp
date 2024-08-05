@@ -1,79 +1,34 @@
 #include "player.hpp"
 #include "input.hpp"
+#include "math.hpp"
 
 namespace entity {
 
 void player::tick() {
+  cmplx vel{0.0f};
+  auto speed = speed_factor;
+  if (input::poll_key(keycode::key_l)) {
+    speed *= 0.66f;
+  }
 
+  if (input::poll_key(keycode::key_a)) {
+    vel.real(-1.0f);
+  } else if (input::poll_key(keycode::key_d)) {
+    vel.real(1.0f);
+  }
+
+  if (input::poll_key(keycode::key_w)) {
+    vel.imag(-1.0f);
+  } else if (input::poll_key(keycode::key_s)) {
+    vel.imag(1.0f);
+  }
+
+  if (math::norm2(vel) > 0) { 
+    vel = math::normalize(vel);
+  }
+
+  const auto pos = transf.cpos() + vel*speed*DT;
+  transf.set_pos(glm::clamp(math::conv(pos), vec2{0.0f}, (vec2)VIEWPORT));
 }
 
 } // namespace entity
-
-// #include "render.hpp"
-// #include "state.hpp"
-//
-// #include <shogle/shogle.hpp>
-//
-// namespace ntf::game {
-//
-// static float sqlen(const vec2& vec) {
-//   return (vec.x*vec.x) + (vec.y*vec.y);
-// }
-//
-// player_state::player_state() {}
-//
-// void player_state::set_sprite(const shogle::sprite* sprite, const shogle::sprite* hitbox) {
-//   _hitbox = hitbox;
-//   _sprite = sprite;
-//
-//   _transf.set_scale(base_scale*sprite->corrected_scale());
-//   _hitbox_transform.set_scale(base_scale*_hitbox->corrected_scale());
-// }
-//
-// void player_state::render() {
-//   render_sprite(*_sprite, _transf, 0);
-// }
-//
-// void player_state::render_hitbox() {
-//   if (_shifting) {
-//     render_sprite(*_hitbox, _hitbox_transform, 0);
-//   }
-// }
-//
-// void player_state::tick(float dt) {
-//   _shifting = false;
-//
-//   float speed = 450.0f;
-//   if (shogle::engine_poll_key(shogle::key_l)) {
-//     speed *= 0.66f;
-//     _shifting = true;
-//   }
-//
-//   vec2 vel{};
-//   if (shogle::engine_poll_key(shogle::key_a)) {
-//     vel.x = -1.0f;
-//   } else if (shogle::engine_poll_key(shogle::key_d)) {
-//     vel.x = 1.0f;
-//   }
-//   if (shogle::engine_poll_key(shogle::key_w)) {
-//     vel.y = -1.0f;
-//   } else if (shogle::engine_poll_key(shogle::key_s)) {
-//     vel.y = 1.0f;
-//   }
-//
-//   if (sqlen(vel) > 0) {
-//     vel = glm::normalize(vel);
-//   }
-//
-//   const auto vp = state.level_info.viewport->size();
-//   const auto pos = _transf.pos() + vel*speed*dt;
-//   _transf.set_pos(glm::clamp(pos, vec2{0.0f}, vp));
-//
-//   if (_shifting) {
-//     _hitbox_transform.set_pos(_transf.pos())
-//       .set_rot(_hitbox_transform.rot() + PI*0.25f*dt);
-//   }
-//   // state.camera.set_pos(_transf.pos()).update();
-// }
-//
-// }

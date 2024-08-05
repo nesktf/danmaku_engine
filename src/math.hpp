@@ -4,12 +4,24 @@
 
 namespace math {
 
-constexpr float cnorm2(cmplx z) {
+constexpr float norm2(cmplx z) {
   return z.real()*z.real() + z.imag()*z.imag();
 }
 
-constexpr cmplx cnormalize(cmplx z) {
-  return z/glm::sqrt(cnorm2(z));
+constexpr float norm(cmplx z) {
+  return glm::sqrt(norm2(z));
+}
+
+constexpr cmplx normalize(cmplx z) {
+  return z/glm::sqrt(norm2(z));
+}
+
+constexpr vec2 conv(const cmplx& z) {
+  return vec2{z.real(), z.imag()};
+}
+
+constexpr cmplx conv(const vec2& v) {
+  return cmplx{v.x, v.y};
 }
 
 } // namespace math

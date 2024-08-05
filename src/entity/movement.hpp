@@ -16,12 +16,12 @@ public:
       if (attraction_exponent == 1) {
         velocity += attraction*av;
       } else {
-        float norm2 = av.real()*av.real() + av.imag()*av.imag();
+        float norm2 = math::norm2(av);
         norm2 = std::pow(norm2, attraction_exponent - 0.5);
         velocity += attraction + (av*norm2);
       }
     }
-    return velocity;
+    return v0;
   }
 
   cmplx operator()(cmplx& pos, uint times) {
@@ -50,9 +50,10 @@ inline movement move_linear(cmplx vel) {
   };
 }
 
-inline movement move_towards(cmplx target, cmplx vel, cmplx att) {
+inline movement move_towards(cmplx target, cmplx vel, cmplx att, float ret) {
   return movement {
     .velocity = vel,
+    .retention = ret,
     .attraction = att,
     .attraction_point = target,
     .attraction_exponent = 1

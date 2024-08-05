@@ -266,4 +266,25 @@ porque ahora mismo es un pedazo de aca semi-legible
 
 #### Fase 2: Lógica del juego
 
+```lua
+local function coso()
+    -- Phase 1
+    spawn_fairy(20, ...) -- spawn at 20 ticks
+    spawn_fairy(40, ...)
+
+    -- Midbos phase
+    spawn_boss(make_lily(), ...)
+    wait_until_dead()
+
+    -- Phase 2
+    spawn_fairy(120) -- Spawn at 120 ticks?
+
+    -- Boss phase
+    spawn_boss(make_chen(), ...)
+    wait_until_dead()
+
+    return -- this ends the timeline
+end
+```
+
 #### Fase 3: Consideraciones extra
