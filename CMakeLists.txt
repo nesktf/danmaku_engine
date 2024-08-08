@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-project(shogle_tests CXX C)
+project(danmaku_engine CXX C)
 
 set(SHOGLE_LIB "lib/shogle")
 add_subdirectory(${SHOGLE_LIB})

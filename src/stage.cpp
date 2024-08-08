@@ -87,7 +87,7 @@ void stage_state::_prepare_lua_env() {
     "viewport", vp
   );
 
-  _lua["package"]["path"] = ";/mnt/patchouli/projects/dev/local/shogle_tests/res/script/?.lua";
+  _lua["package"]["path"] = ";res/script/?.lua";
 
   _lua.set_function("__LOG_ERROR", [](std::string msg) { ntf::log::error("{}", msg); });
   _lua.set_function("__LOG_WARNING", [](std::string msg) { ntf::log::warning("{}", msg); });
