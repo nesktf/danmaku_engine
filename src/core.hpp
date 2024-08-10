@@ -22,23 +22,23 @@ using ntf::mat4;
 using ntf::color3;
 using ntf::color4;
 
-using ntf::shogle::transform2d;
-using ntf::shogle::transform3d;
+using ntf::transform2d;
+using ntf::transform3d;
 
-using ntf::shogle::sprite;
-using ntf::shogle::sprite_group;
-using ntf::shogle::sprite_animator;
-using ntf::shogle::sprite_group;
-using ntf::shogle::spritesheet;
+using ntf::sprite;
+using ntf::sprite_group;
+using ntf::sprite_animator;
+using ntf::sprite_group;
+using ntf::spritesheet;
 
-using ntf::shogle::font;
+using ntf::font;
 
-using ntf::shogle::shader_program;
+using ntf::shader_program;
 
-using ntf::shogle::framebuffer;
+using ntf::framebuffer;
 
-using ntf::shogle::keycode;
-using ntf::shogle::keystate;
+using ntf::keycode;
+using ntf::keystate;
 
 using ntf::strmap;
 using std::vector;

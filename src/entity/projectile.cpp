@@ -2,7 +2,7 @@
 
 namespace entity {
 
-projectile::projectile(ntf::shogle::sprite sprite_, movement movement_, cmplx init, uint birth_) :
+projectile::projectile(ntf::sprite sprite_, movement movement_, cmplx init, uint birth_) :
   sprite(sprite_), move(movement_), birth(birth_) {
   transform.set_scale(20.0f).set_pos(init);
 }

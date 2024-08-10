@@ -18,7 +18,7 @@ int main() {
 
   render::post_init();
 
-  ntf::shogle::engine_main_loop(UPS, render::draw, global::tick);
+  ntf::engine_main_loop(UPS, render::draw, global::tick);
 }
 
 static void destroy() {

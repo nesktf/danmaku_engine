@@ -36,31 +36,31 @@ static void update_viewport_mat(size_t w, size_t h) {
   );
   stage_viewport.cam_pos = (vec2)VIEWPORT*0.5f;
   stage_viewport.view = 
-    ntf::shogle::view2d((vec2)VIEWPORT*0.5f, stage_viewport.cam_pos, vec2{1.0f}, 0.0f);
+    ntf::view2d((vec2)VIEWPORT*0.5f, stage_viewport.cam_pos, vec2{1.0f}, 0.0f);
 }
 
 static void update_viewport(size_t w, size_t h) {
-  ntf::shogle::render_viewport(w, h);
+  ntf::render_viewport(w, h);
   update_window_mat(w, h);
   stage_viewport.transform.set_pos(vec2{w,h}*0.5f);
 }
 
 void render::destroy() {
-  ntf::shogle::engine_destroy();
+  ntf::engine_destroy();
 }
 
 void render::init() {
   // Load OpenGL and things
-  ntf::shogle::engine_init(WIN_SIZE.x, WIN_SIZE.y, "test");
-  ntf::shogle::engine_viewport_event(update_viewport);
+  ntf::engine_init(WIN_SIZE.x, WIN_SIZE.y, "test");
+  ntf::engine_viewport_event(update_viewport);
 
-  ntf::shogle::engine_use_vsync(false);
-  ntf::shogle::render_blending(true);
+  ntf::engine_use_vsync(false);
+  ntf::render_blending(true);
 }
 
 void render::post_init() {
   // Prepare shaders and things
-  auto vp = ntf::shogle::engine_window_size();
+  auto vp = ntf::engine_window_size();
   update_window_mat(vp.x, vp.y);
   update_viewport_mat(vp.y, vp.y);
 
@@ -71,23 +71,23 @@ void render::post_init() {
   // TODO: cache shader uniforms
 }
 
-static void draw_sprite(const ntf::shogle::sprite& sprite, transform2d& transform, const color4& color) {
+static void draw_sprite(const ntf::sprite& sprite, transform2d& transform, const color4& color) {
   const auto& shader = res::shader("sprite");
   const auto sprite_sampler = 0;
 
-  ntf::shogle::render_use_shader(shader);
+  ntf::render_use_shader(shader);
 
-  ntf::shogle::render_set_uniform(shader, "proj", stage_viewport.proj);
-  ntf::shogle::render_set_uniform(shader, "view", stage_viewport.view);
-  ntf::shogle::render_set_uniform(shader, "model", transform.mat());
+  ntf::render_set_uniform(shader, "proj", stage_viewport.proj);
+  ntf::render_set_uniform(shader, "view", stage_viewport.view);
+  ntf::render_set_uniform(shader, "model", transform.mat());
 
-  ntf::shogle::render_set_uniform(shader, "offset", sprite.texture_offset);
-  ntf::shogle::render_set_uniform(shader, "sprite_color", color);
+  ntf::render_set_uniform(shader, "offset", sprite.texture_offset);
+  ntf::render_set_uniform(shader, "sprite_color", color);
 
-  ntf::shogle::render_set_uniform(shader, "sprite_sampler", (int)sprite_sampler);
-  ntf::shogle::render_bind_sampler(*sprite.texture, (size_t)sprite_sampler);
+  ntf::render_set_uniform(shader, "sprite_sampler", (int)sprite_sampler);
+  ntf::render_bind_sampler(*sprite.texture, (size_t)sprite_sampler);
 
-  ntf::shogle::render_draw_quad();
+  ntf::render_draw_quad();
 }
 
 static void draw_player() {
@@ -117,24 +117,24 @@ static void draw_gui() {
   const auto& vp_shader = res::shader("framebuffer");
   const auto framebuffer_sampler = 0;
 
-  ntf::shogle::render_use_shader(vp_shader);
+  ntf::render_use_shader(vp_shader);
 
-  ntf::shogle::render_set_uniform(vp_shader, "proj", window.proj);
-  ntf::shogle::render_set_uniform(vp_shader, "view", mat4{1.0f});
-  ntf::shogle::render_set_uniform(vp_shader, "model", stage_viewport.transform.mat());
+  ntf::render_set_uniform(vp_shader, "proj", window.proj);
+  ntf::render_set_uniform(vp_shader, "view", mat4{1.0f});
+  ntf::render_set_uniform(vp_shader, "model", stage_viewport.transform.mat());
 
-  ntf::shogle::render_set_uniform(vp_shader, "fb_sampler", (int)framebuffer_sampler);
-  ntf::shogle::render_bind_sampler(stage_viewport.viewport.tex(), (size_t)framebuffer_sampler);
+  ntf::render_set_uniform(vp_shader, "fb_sampler", (int)framebuffer_sampler);
+  ntf::render_bind_sampler(stage_viewport.viewport.tex(), (size_t)framebuffer_sampler);
 
-  ntf::shogle::render_draw_quad();
+  ntf::render_draw_quad();
 }
 
 void render::draw(double dt, double alpha) {
-  ntf::shogle::render_clear(color3{0.2f});
+  ntf::render_clear(color3{0.2f});
 
   const auto& wsz = window.size;
   stage_viewport.viewport.bind(wsz.x, wsz.y, [](){
-    ntf::shogle::render_clear(color3{0.3f});
+    ntf::render_clear(color3{0.3f});
     draw_boss();
     draw_player();
     draw_stage();

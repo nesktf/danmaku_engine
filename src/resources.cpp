@@ -4,19 +4,19 @@
 #include <shogle/core/log.hpp>
 
 static struct {
-  ntf::strmap<ntf::shogle::spritesheet> sprites;
-  ntf::strmap<ntf::shogle::shader_program> shaders;
-  ntf::strmap<ntf::shogle::font> fonts;
+  ntf::strmap<ntf::spritesheet> sprites;
+  ntf::strmap<ntf::shader_program> shaders;
+  ntf::strmap<ntf::font> fonts;
 } resources;
 
-static ntf::shogle::shader_program load_shader(std::string_view vert_path, std::string_view frag_path) {
-  ntf::shogle::shader_program prog;
+static ntf::shader_program load_shader(std::string_view vert_path, std::string_view frag_path) {
+  ntf::shader_program prog;
 
-  auto vert_src = ntf::shogle::file_contents(vert_path.data());
-  auto frag_src = ntf::shogle::file_contents(frag_path.data());
+  auto vert_src = ntf::file_contents(vert_path.data());
+  auto frag_src = ntf::file_contents(frag_path.data());
 
   try {
-    prog = ntf::shogle::load_shader_program(vert_src, frag_src);
+    prog = ntf::load_shader_program(vert_src, frag_src);
   } catch(...) {
     ntf::log::error("[resources::load_shader] Failed to link shader");
     throw;
@@ -41,15 +41,15 @@ static void load_fonts() {
 
 static void load_sprites() {
   auto& sprites = resources.sprites;
-  auto filter = ntf::shogle::tex_filter::nearest;
-  auto wrap   = ntf::shogle::tex_wrap::repeat;
+  auto filter = ntf::tex_filter::nearest;
+  auto wrap   = ntf::tex_wrap::repeat;
 
   sprites.emplace(std::make_pair("enemies", 
-    ntf::shogle::load_spritesheet("res/spritesheet/enemies.json", filter, wrap)));
+    ntf::load_spritesheet("res/spritesheet/enemies.json", filter, wrap)));
   sprites.emplace(std::make_pair("effects", 
-    ntf::shogle::load_spritesheet("res/spritesheet/effects.json", filter, wrap)));
+    ntf::load_spritesheet("res/spritesheet/effects.json", filter, wrap)));
   sprites.emplace(std::make_pair("chara", 
-    ntf::shogle::load_spritesheet("res/spritesheet/chara.json", filter, wrap)));
+    ntf::load_spritesheet("res/spritesheet/chara.json", filter, wrap)));
 }
 
 void res::init() {
