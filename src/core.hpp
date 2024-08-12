@@ -1,14 +1,6 @@
 #pragma once
 
-#include <shogle/engine.hpp>
 #include <shogle/core/types.hpp>
-#include <shogle/scene/transform.hpp>
-#include <shogle/res/spritesheet.hpp>
-#include <shogle/render/shader.hpp>
-#include <shogle/res/spritesheet.hpp>
-#include <shogle/res/font.hpp>
-#include <shogle/render/framebuffer.hpp>
-#include <shogle/scene/camera.hpp>
 
 using ntf::vec2;
 using ntf::vec3;
@@ -21,24 +13,6 @@ using ntf::mat4;
 
 using ntf::color3;
 using ntf::color4;
-
-using ntf::transform2d;
-using ntf::transform3d;
-
-using ntf::sprite;
-using ntf::sprite_group;
-using ntf::sprite_animator;
-using ntf::sprite_group;
-using ntf::spritesheet;
-
-using ntf::font;
-
-using ntf::shader_program;
-
-using ntf::framebuffer;
-
-using ntf::keycode;
-using ntf::keystate;
 
 using ntf::strmap;
 using std::vector;

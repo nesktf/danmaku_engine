@@ -4,9 +4,8 @@
 #include <shogle/core/log.hpp>
 
 static struct {
-  ntf::strmap<ntf::spritesheet> sprites;
-  ntf::strmap<ntf::shader_program> shaders;
-  ntf::strmap<ntf::font> fonts;
+  ntf::resource_pool<ntf::shader_program> shaders;
+  ntf::resource_pool<ntf::spritesheet, ntf::spritesheet_data> sprites;
 } resources;
 
 static ntf::shader_program load_shader(std::string_view vert_path, std::string_view frag_path) {
@@ -27,16 +26,12 @@ static ntf::shader_program load_shader(std::string_view vert_path, std::string_v
 
 static void load_shaders() {
   auto& shaders = resources.shaders;
-  shaders.emplace(std::make_pair("sprite", 
-    load_shader("res/shader/sprite.vs.glsl", "res/shader/sprite.fs.glsl")));
-  shaders.emplace(std::make_pair("font", 
-    load_shader("res/shader/font.vs.glsl", "res/shader/font.fs.glsl")));
-  shaders.emplace(std::make_pair("framebuffer", 
-    load_shader("res/shader/framebuffer.vs.glsl", "res/shader/framebuffer.fs.glsl")));
-}
-
-static void load_fonts() {
-
+  shaders.emplace("sprite", 
+                  load_shader("res/shader/sprite.vs.glsl", "res/shader/sprite.fs.glsl"));
+  shaders.emplace("font", 
+                  load_shader("res/shader/font.vs.glsl", "res/shader/font.fs.glsl"));
+  shaders.emplace("framebuffer", 
+                  load_shader("res/shader/framebuffer.vs.glsl", "res/shader/framebuffer.fs.glsl"));
 }
 
 static void load_sprites() {
@@ -44,29 +39,44 @@ static void load_sprites() {
   auto filter = ntf::tex_filter::nearest;
   auto wrap   = ntf::tex_wrap::repeat;
 
-  sprites.emplace(std::make_pair("enemies", 
-    ntf::load_spritesheet("res/spritesheet/enemies.json", filter, wrap)));
-  sprites.emplace(std::make_pair("effects", 
-    ntf::load_spritesheet("res/spritesheet/effects.json", filter, wrap)));
-  sprites.emplace(std::make_pair("chara", 
-    ntf::load_spritesheet("res/spritesheet/chara.json", filter, wrap)));
+  sprites.emplace("enemies", 
+                  ntf::load_spritesheet("res/spritesheet/enemies.json", filter, wrap));
+  sprites.emplace("effects", 
+                  ntf::load_spritesheet("res/spritesheet/effects.json", filter, wrap));
+  sprites.emplace("chara", 
+                  ntf::load_spritesheet("res/spritesheet/chara.json", filter, wrap));
 }
 
 void res::init() {
   load_shaders();
   load_sprites();
-  load_fonts();
 }
 
-const spritesheet& res::spritesheet(std::string_view name) {
-  return resources.sprites.at(name.data());
+res::spritesheet_id res::spritesheet_index(std::string_view name) {
+  return resources.sprites.id(name);
 }
 
-const shader_program& res::shader(std::string_view name) {
-  return resources.shaders.at(name.data());
+const ntf::spritesheet& res::spritesheet_at(res::spritesheet_id sheet) {
+  return resources.sprites.at(sheet);
 }
 
-const font& res::font(std::string_view name) {
-  return resources.fonts.at(name.data());
+const ntf::spritesheet& res::spritesheet_at(std::string_view name) {
+  return resources.sprites.at(name);
 }
 
+const ntf::spritesheet::sprite_data& res::sprite_data_at(res::sprite_id sprite) {
+  const auto& sheet = resources.sprites.at(sprite.sheet);
+  return sheet[sprite.index];
+}
+
+res::shader_id res::shader_index(std::string_view name) {
+  return resources.shaders.id(name);
+}
+
+const ntf::shader_program& res::shader_at(res::shader_id shader) {
+  return resources.shaders.at(shader);
+}
+
+const ntf::shader_program& res::shader_at(std::string_view name) {
+  return resources.shaders.at(name);
+}

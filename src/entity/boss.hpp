@@ -1,8 +1,11 @@
 #pragma once
 
 #include "core.hpp"
+#include "resources.hpp"
 
 #include "entity/movement.hpp"
+
+#include <shogle/scene/transform.hpp>
 
 namespace entity {
 
@@ -27,9 +30,10 @@ public:
   }
 
 public:
-  void set_sprite(sprite spr) {
+  void set_sprite(res::sprite_id spr) {
     _sprite = spr;
-    _transform.set_scale(_sprite.sprite_size*_scale);
+    const auto& data = res::sprite_data_at(spr);
+    _transform.set_scale(data.base_size*_scale);
   }
 
   void set_scale(float scale) {
@@ -54,8 +58,8 @@ public:
   }
 
 public:
-  transform2d& transform() { return _transform; }
-  sprite spr() { return _sprite; }
+  ntf::transform2d& transform() { return _transform; }
+  res::sprite_id spr() { return _sprite; }
   bool ready() const { return _ready; }
   
 private:
@@ -63,8 +67,8 @@ private:
   movement _move;
   float _ang_speed {0.0f};
   float _scale{50.0f};
-  transform2d _transform;
-  struct sprite _sprite;
+  ntf::transform2d _transform;
+  res::sprite_id _sprite;
 };
 
 } // namespace entity

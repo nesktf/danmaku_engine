@@ -2,6 +2,13 @@
 #include "render.hpp"
 #include "resources.hpp"
 
+#include <shogle/engine.hpp>
+
+#include <shogle/render/framebuffer.hpp>
+
+#include <shogle/scene/transform.hpp>
+#include <shogle/scene/camera.hpp>
+
 static struct {
   mat4 proj;
   ivec2 size;
@@ -11,8 +18,8 @@ static struct {
   mat4 proj;
   mat4 view;
   vec2 cam_pos{0.0f};
-  transform2d transform;
-  framebuffer viewport;
+  ntf::transform2d transform;
+  ntf::framebuffer viewport;
 } stage_viewport;
 
 static void update_window_mat(size_t w, size_t h) {
@@ -64,15 +71,18 @@ void render::post_init() {
   update_window_mat(vp.x, vp.y);
   update_viewport_mat(vp.y, vp.y);
 
-  stage_viewport.viewport = framebuffer{VIEWPORT.x, VIEWPORT.y};
+  stage_viewport.viewport = ntf::framebuffer{VIEWPORT.x, VIEWPORT.y};
   stage_viewport.transform.set_pos((vec2)vp*0.5f) // At the middle of the window
     .set_scale(VIEWPORT);
 
   // TODO: cache shader uniforms
 }
 
-static void draw_sprite(const ntf::sprite& sprite, transform2d& transform, const color4& color) {
-  const auto& shader = res::shader("sprite");
+static void draw_sprite(res::sprite_id sprite, ntf::transform2d& transform, const color4& color) {
+  const auto& shader = res::shader_at("sprite");
+  const auto& sheet = res::spritesheet_at(sprite.sheet);
+  const auto& sprite_data = sheet[sprite.index];
+
   const auto sprite_sampler = 0;
 
   ntf::render_use_shader(shader);
@@ -81,11 +91,11 @@ static void draw_sprite(const ntf::sprite& sprite, transform2d& transform, const
   ntf::render_set_uniform(shader, "view", stage_viewport.view);
   ntf::render_set_uniform(shader, "model", transform.mat());
 
-  ntf::render_set_uniform(shader, "offset", sprite.texture_offset);
+  ntf::render_set_uniform(shader, "offset", sprite_data.offset);
   ntf::render_set_uniform(shader, "sprite_color", color);
 
   ntf::render_set_uniform(shader, "sprite_sampler", (int)sprite_sampler);
-  ntf::render_bind_sampler(*sprite.texture, (size_t)sprite_sampler);
+  ntf::render_bind_sampler(sheet.tex(), (size_t)sprite_sampler);
 
   ntf::render_draw_quad();
 }
@@ -114,7 +124,7 @@ static void draw_stage() {
 }
 
 static void draw_gui() {
-  const auto& vp_shader = res::shader("framebuffer");
+  const auto& vp_shader = res::shader_at("framebuffer");
   const auto framebuffer_sampler = 0;
 
   ntf::render_use_shader(vp_shader);

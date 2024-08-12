@@ -1,21 +1,22 @@
 #pragma once
 
 #include "entity/movement.hpp"
+#include "resources.hpp"
 
-#include <shogle/res/spritesheet.hpp>
+#include <shogle/scene/transform.hpp>
 
 namespace entity {
 
 class projectile {
 public:
-  projectile(ntf::sprite sprite_, movement movement_, cmplx init, uint birth_);
+  projectile(res::sprite_id sprite_, movement movement_, cmplx init, uint birth_);
 
 public:
   void tick();
 
 public:
-  ntf::sprite sprite;
-  transform2d transform;
+  res::sprite_id sprite;
+  ntf::transform2d transform;
   movement move;
   uint birth;
 };

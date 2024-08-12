@@ -1,8 +1,9 @@
 #define SOL_ALL_SAFETIES_ON 1
 
 #include "global.hpp"
-// #include "stage.hpp"
+#include "stage.hpp"
 #include "resources.hpp"
+
 #include "entity/boss.hpp"
 
 #include <shogle/core/log.hpp>
@@ -37,7 +38,12 @@ void stage_state::load_env(std::string_view stage_script) {
 
   player.set_pos((vec2)VIEWPORT*0.5f);
   player.set_scale(40.0f);
-  player.set_sprite(res::spritesheet("effects").sprite_at("stars_small", 0));
+  const auto sheet_id = res::spritesheet_index("effects");
+  const auto& sheet = res::spritesheet_at(sheet_id);
+  const auto& sprite_index = sheet.group_at("stars_small")[0];
+
+  ntf::log::debug("AAAA {} {}", sprite_index, sheet_id);
+  player.set_sprite(res::sprite_id{.index = sprite_index, .sheet = sheet_id});
 }
 
 void stage_state::tick() {
@@ -60,7 +66,6 @@ void stage_state::tick() {
   _task_time++;
 
   for (auto& projectile : projectiles) {
-    projectile.sprite = res::spritesheet("effects").sprite_at("stars_small", "test", _frames+projectile.birth);
     projectile.tick();
   }
 
@@ -95,7 +100,10 @@ void stage_state::_prepare_lua_env() {
   _lua.set_function("__LOG_INFO", [](std::string msg) { ntf::log::info("{}", msg); });
   _lua.set_function("__LOG_VERBOSE", [](std::string msg) { ntf::log::verbose("{}", msg); });
   _lua.set_function("__SPAWN_BOSS", [this](float scale, float ang_speed, sol::table p0, sol::table p1) {
-    boss.set_sprite(res::spritesheet("effects").sprite_at("stars_small", 0));
+    const auto sheet_id = res::spritesheet_index("effects");
+    const auto& sheet = res::spritesheet_at(sheet_id);
+    const auto sprite_index = sheet.group_at("stars_small")[0];
+    boss.set_sprite(res::sprite_id{.index = sprite_index, .sheet = sheet_id});
 
     boss.set_scale(scale);
     boss.set_angular_speed(ang_speed);
@@ -122,7 +130,12 @@ void stage_state::_prepare_lua_env() {
   _lua.set_function("__SPAWN_DANMAKU", [this](sol::table dir, float speed, sol::table pos) {
     cmplx proj_dir = cmplx{dir.get<float>("real"), dir.get<float>("imag")};
     cmplx proj_pos = cmplx{pos.get<float>("real"), pos.get<float>("imag")};
-    sprite star = res::spritesheet("effects").sprite_at("stars_small", 0);
+
+    const auto sheet_id = res::spritesheet_index("effects");
+    const auto& sheet = res::spritesheet_at(sheet_id);
+    const auto sprite_index = sheet.group_at("stars_small")[1];
+
+    res::sprite_id star {.index = sprite_index, .sheet = sheet_id};
     projectiles.emplace_back(star, entity::move_linear(proj_dir*speed), proj_pos, _frames);
   });
 }

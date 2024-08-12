@@ -1,6 +1,9 @@
 #pragma once
 
 #include "core.hpp"
+#include "resources.hpp"
+
+#include <shogle/scene/transform.hpp>
 
 namespace entity {
 
@@ -12,9 +15,10 @@ public:
   void tick();
 
 public:
-  void set_sprite(sprite sp) {
+  void set_sprite(res::sprite_id sp) {
     spr = sp;
-    transf.set_scale(spr.sprite_size*scale);
+    const auto& data = res::sprite_data_at(sp);
+    transf.set_scale(data.base_size*scale);
   }
 
   template<typename Vec>
@@ -26,13 +30,13 @@ public:
     scale = sc;
   }
 
-  transform2d& transform() { return transf; }
+  ntf::transform2d& transform() { return transf; }
 
 public:
   float scale {40.0f};
   float speed_factor{450.0f};
-  sprite spr;
-  transform2d transf;
+  res::sprite_id spr;
+  ntf::transform2d transf;
   bool shifting{false};
 };
 
