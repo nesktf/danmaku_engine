@@ -14,10 +14,11 @@ void stage_state::load_env(std::string_view stage_script) {
   // Reset previous state (if any)
   if (_frames > 0) {
     _frames = 0;
-    _main_task.reset();
+    _main_task = sol::protected_function{};
     _lua = sol::state{};
     _task_time = 0;
     _task_wait = 0;
+    projectiles.clear();
   }
 
   // Load new environment
@@ -38,12 +39,11 @@ void stage_state::load_env(std::string_view stage_script) {
 
   player.set_pos((vec2)VIEWPORT*0.5f);
   player.set_scale(40.0f);
-  const auto sheet_id = res::spritesheet_index("effects");
+  const auto sheet_id = res::spritesheet_index("default");
   const auto& sheet = res::spritesheet_at(sheet_id);
-  const auto& sprite_index = sheet.group_at("stars_small")[0];
+  // const auto& sprite_index = sheet.group_at("stars_small")[0];
 
-  ntf::log::debug("AAAA {} {}", sprite_index, sheet_id);
-  player.set_sprite(res::sprite_id{.index = sprite_index, .sheet = sheet_id});
+  player.set_sprite(res::sprite_id{.index = 0, .sheet = sheet_id});
 }
 
 void stage_state::tick() {

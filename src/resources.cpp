@@ -5,6 +5,7 @@
 
 static struct {
   ntf::resource_pool<ntf::shader_program> shaders;
+  ntf::resource_pool<ntf::font> fonts;
   ntf::resource_pool<ntf::spritesheet, ntf::spritesheet_data> sprites;
 } resources;
 
@@ -34,10 +35,21 @@ static void load_shaders() {
                   load_shader("res/shader/framebuffer.vs.glsl", "res/shader/framebuffer.fs.glsl"));
 }
 
+static void prepare_default_textures() {
+  // haha funny source missing texture
+  uint8_t pixels[] = {0x0, 0x0, 0x0, 0xFE, 0x0, 0xFE, 0x0, 0x0, 0xFE, 0x0, 0xFE, 0x00};
+  ntf::texture2d default_tex{&pixels[0], ivec2{2, 2}, ntf::tex_format::rgb};
+  default_tex.set_filter(ntf::tex_filter::nearest);
+  default_tex.set_wrap(ntf::tex_wrap::repeat);
+  resources.sprites.emplace("default", std::move(default_tex));
+}
+
 static void load_sprites() {
   auto& sprites = resources.sprites;
   auto filter = ntf::tex_filter::nearest;
   auto wrap   = ntf::tex_wrap::repeat;
+
+  prepare_default_textures();
 
   sprites.emplace("enemies", 
                   ntf::load_spritesheet("res/spritesheet/enemies.json", filter, wrap));
@@ -47,9 +59,16 @@ static void load_sprites() {
                   ntf::load_spritesheet("res/spritesheet/chara.json", filter, wrap));
 }
 
+static void load_fonts() {
+  auto& fonts = resources.fonts;
+
+  fonts.emplace("arial", ntf::load_font("res/fonts/arial.ttf"));
+}
+
 void res::init() {
   load_shaders();
   load_sprites();
+  load_fonts();
 }
 
 res::spritesheet_id res::spritesheet_index(std::string_view name) {
@@ -79,4 +98,12 @@ const ntf::shader_program& res::shader_at(res::shader_id shader) {
 
 const ntf::shader_program& res::shader_at(std::string_view name) {
   return resources.shaders.at(name);
+}
+
+res::font_id res::font_index(std::string_view name) {
+  return resources.fonts.id(name);
+}
+
+const ntf::font& res::font_at(font_id font) {
+  return resources.fonts.at(font);
 }

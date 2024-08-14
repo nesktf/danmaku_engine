@@ -1,6 +1,7 @@
 #include "global.hpp"
 #include "render.hpp"
 #include "resources.hpp"
+#include "frontend.hpp"
 
 #include <shogle/engine.hpp>
 
@@ -33,7 +34,7 @@ static void update_window_mat(size_t w, size_t h) {
   window.size = ivec2{w, h};
 }
 
-static void update_viewport_mat(size_t w, size_t h) {
+static void update_viewport_mat([[maybe_unused]] size_t w, [[maybe_unused]] size_t h) {
   float znear = -10.0f;
   float zfar = 1.0f;
   stage_viewport.proj = glm::ortho(
@@ -139,9 +140,7 @@ static void draw_gui() {
   ntf::render_draw_quad();
 }
 
-void render::draw(double dt, double alpha) {
-  ntf::render_clear(color3{0.2f});
-
+static void render_gameplay() {
   const auto& wsz = window.size;
   stage_viewport.viewport.bind(wsz.x, wsz.y, [](){
     ntf::render_clear(color3{0.3f});
@@ -150,5 +149,74 @@ void render::draw(double dt, double alpha) {
     draw_stage();
   });
   draw_gui();
+}
+
+static void render_frontend(double) {
+  const auto& font = res::font_at(res::font_index("arial"));
+  const auto& font_shader = res::shader_at(res::shader_index("font"));
+
+  auto& menu = frontend::state().entry();
+  draw_sprite(menu.background, menu.back_transform, color4{1.0f});
+
+  for (size_t i = 0; i < menu.entries.size(); ++i) {
+    const auto focused_index = menu.focused;
+    color4 col{1.0f};
+    if (i == focused_index) {
+      col = color4{1.0f, 0.0f, 0.0f, 1.0f};
+    }
+
+    ntf::transform2d font_transform;
+    const vec2 pos {100.0f,i*50.0f + 200.0f};
+    font_transform.set_pos(pos);
+
+    ntf::render_use_shader(font_shader);
+    
+    ntf::render_set_uniform(font_shader, "proj", window.proj);
+    ntf::render_set_uniform(font_shader, "model", font_transform.mat());
+    ntf::render_set_uniform(font_shader, "text_color", col);
+
+    const auto shader_sampler = 0;
+    ntf::render_set_uniform(font_shader, "tex", (int)shader_sampler);
+    ntf::render_draw_text(font, vec2{0.0f, 0.0f}, 1.0f, menu.entries[i].text);
+  }
+}
+
+static void render_font(res::font_id font_id, std::string_view text) {
+  const auto& font = res::font_at(font_id);
+
+  const auto shad_id = res::shader_index("font");
+  const auto& shader = res::shader_at(shad_id);
+  auto text_world_width = [&]() -> float{
+    float width{};
+    for (auto c = text.begin(); c != text.end(); ++c) {
+      auto [tex, ch] = font._glyph_tex.at(*c);
+      width += (ch.advance >> 6);
+    }
+    return width;
+  };
+
+}
+
+static void render_loading() {
+
+}
+
+void render::draw([[maybe_unused]] double dt, [[maybe_unused]] double alpha) {
+  ntf::render_clear(color3{0.2f});
+
+  switch (global::state().current_state) {
+    case global::states::loading: {
+      render_loading();
+      break;
+    }
+    case global::states::frontend: {
+      render_frontend(dt);
+      break;
+    }
+    case global::states::gameplay: {
+      render_gameplay();
+      break;
+    }
+  }
 }
 
