@@ -2,6 +2,7 @@
 
 #include "core.hpp"
 #include "resources.hpp"
+#include "render.hpp"
 
 #include "entity/movement.hpp"
 
@@ -30,10 +31,10 @@ public:
   }
 
 public:
-  void set_sprite(res::sprite_id spr) {
+  void set_sprite(res::sprite spr) {
     _sprite = spr;
-    const auto& data = res::sprite_data_at(spr);
-    _transform.set_scale(data.base_size*_scale);
+    const auto& meta = spr.get_meta();
+    _transform.set_scale(meta.aspect()*_scale);
   }
 
   void set_scale(float scale) {
@@ -59,16 +60,20 @@ public:
 
 public:
   ntf::transform2d& transform() { return _transform; }
-  res::sprite_id spr() { return _sprite; }
+  res::sprite sprite() { return _sprite; }
+  render::shader_renderer* renderer() { return _renderer; }
+
   bool ready() const { return _ready; }
   
 private:
+  res::sprite _sprite;
+  ntf::transform2d _transform;
+  render::shader_renderer* _renderer{nullptr};
+
   bool _ready {false};
   movement _move;
   float _ang_speed {0.0f};
   float _scale{50.0f};
-  ntf::transform2d _transform;
-  res::sprite_id _sprite;
 };
 
 } // namespace entity

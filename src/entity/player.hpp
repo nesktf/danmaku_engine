@@ -2,6 +2,7 @@
 
 #include "core.hpp"
 #include "resources.hpp"
+#include "render.hpp"
 
 #include <shogle/scene/transform.hpp>
 
@@ -15,10 +16,10 @@ public:
   void tick();
 
 public:
-  void set_sprite(res::sprite_id sp) {
-    spr = sp;
-    const auto& data = res::sprite_data_at(sp);
-    transf.set_scale(data.base_size*scale);
+  void set_sprite(res::sprite sp) {
+    _sprite = sp;
+    const auto& meta = _sprite.get_meta();
+    transf.set_scale(meta.aspect()*scale);
   }
 
   template<typename Vec>
@@ -31,12 +32,16 @@ public:
   }
 
   ntf::transform2d& transform() { return transf; }
+  res::sprite sprite() const { return _sprite; }
+  render::shader_renderer* renderer() { return _renderer; }
 
 public:
+  res::sprite _sprite;
+  ntf::transform2d transf;
+  render::shader_renderer* _renderer{nullptr};
+
   float scale {40.0f};
   float speed_factor{450.0f};
-  res::sprite_id spr;
-  ntf::transform2d transf;
   bool shifting{false};
 };
 

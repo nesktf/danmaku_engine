@@ -39,11 +39,8 @@ void stage_state::load_env(std::string_view stage_script) {
 
   player.set_pos((vec2)VIEWPORT*0.5f);
   player.set_scale(40.0f);
-  const auto sheet_id = res::spritesheet_index("default");
-  const auto& sheet = res::spritesheet_at(sheet_id);
-  // const auto& sprite_index = sheet.group_at("stars_small")[0];
 
-  player.set_sprite(res::sprite_id{.index = 0, .sheet = sheet_id});
+  player.set_sprite(res::sprite{1, 1});
 }
 
 void stage_state::tick() {
@@ -100,10 +97,11 @@ void stage_state::_prepare_lua_env() {
   _lua.set_function("__LOG_INFO", [](std::string msg) { ntf::log::info("{}", msg); });
   _lua.set_function("__LOG_VERBOSE", [](std::string msg) { ntf::log::verbose("{}", msg); });
   _lua.set_function("__SPAWN_BOSS", [this](float scale, float ang_speed, sol::table p0, sol::table p1) {
-    const auto sheet_id = res::spritesheet_index("effects");
-    const auto& sheet = res::spritesheet_at(sheet_id);
-    const auto sprite_index = sheet.group_at("stars_small")[0];
-    boss.set_sprite(res::sprite_id{.index = sprite_index, .sheet = sheet_id});
+    const auto atlas_id = res::sprite_atlas{"effects"};
+    const auto& atlas = atlas_id.get();
+    const auto index = atlas.group_at("stars_small")[0];
+
+    boss.set_sprite(res::sprite{atlas_id, index});
 
     boss.set_scale(scale);
     boss.set_angular_speed(ang_speed);
@@ -131,19 +129,20 @@ void stage_state::_prepare_lua_env() {
     cmplx proj_dir = cmplx{dir.get<float>("real"), dir.get<float>("imag")};
     cmplx proj_pos = cmplx{pos.get<float>("real"), pos.get<float>("imag")};
 
-    const auto sheet_id = res::spritesheet_index("effects");
-    const auto& sheet = res::spritesheet_at(sheet_id);
-    const auto sprite_index = sheet.group_at("stars_small")[1];
+    const auto atlas_id = res::sprite_atlas{"effects"};
+    const auto& atlas = atlas_id.get();
+    const auto index = atlas.group_at("stars_small")[1];
 
-    res::sprite_id star {.index = sprite_index, .sheet = sheet_id};
-    projectiles.emplace_back(star, entity::move_linear(proj_dir*speed), proj_pos, _frames);
+
+    projectiles.emplace_back(res::sprite{atlas_id, index}, 
+      entity::move_linear(proj_dir*speed), proj_pos, _frames);
   });
 }
 
 void stage_state::_clean_oob() {
   const float extra = 10.f;
-  std::erase_if(projectiles, [&](const auto& projectile) { 
-    const auto pos = projectile.transform.pos();
+  std::erase_if(projectiles, [&](auto& projectile) { 
+    const auto pos = projectile.transform().pos();
     return (pos.x < -extra || pos.y < -extra || pos.x > VIEWPORT.x+extra || pos.y > VIEWPORT.y+extra);
   });
 }

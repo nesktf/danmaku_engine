@@ -5,34 +5,101 @@
 #include <shogle/render/shader.hpp>
 
 #include <shogle/res/pool.hpp>
-#include <shogle/res/spritesheet.hpp>
+#include <shogle/res/atlas.hpp>
 #include <shogle/res/font.hpp>
 
 namespace res {
 
-using spritesheet_id = ntf::resource_id;
-using shader_id = ntf::resource_id;
-using font_id = ntf::resource_id;
+void init();
 
-struct sprite_id {
-  ntf::spritesheet::sprite index;
-  spritesheet_id sheet;
+class shader {
+public:
+  shader() = default;
+
+  shader(ntf::resource_id id) : _shader(id) {}
+
+  shader(std::string_view name);
+
+public:
+  ntf::resource_id id() const { return _shader; }
+  const ntf::shader_program& get() const;
+
+  bool valid() const;
+  operator bool() const { return valid(); }
+
+private:
+  ntf::resource_id _shader{};
 };
 
 
-void init();
+class sprite;
+class sprite_atlas {
+public:
+  sprite_atlas() = default;
 
-spritesheet_id spritesheet_index(std::string_view name);
-const ntf::spritesheet& spritesheet_at(spritesheet_id sheet);
-const ntf::spritesheet& spritesheet_at(std::string_view name);
+  sprite_atlas(ntf::resource_id id) : _atlas(id) {}
 
-const ntf::spritesheet::sprite_data& sprite_data_at(sprite_id sprite);
+  sprite_atlas(std::string_view name);
 
-shader_id shader_index(std::string_view name);
-const ntf::shader_program& shader_at(shader_id shader);
-const ntf::shader_program& shader_at(std::string_view name);
+public:
+  ntf::resource_id id() const { return _atlas; }
+  const ntf::texture_atlas& get() const;
+  sprite at(ntf::texture_atlas::texture tex) const;
 
-font_id font_index(std::string_view name);
-const ntf::font& font_at(font_id font);
+  bool valid() const;
+  operator bool() const { return valid(); }
+
+public:
+  static sprite_atlas default_atlas();
+
+private:
+  ntf::resource_id _atlas{};
+};
+
+
+class sprite {
+public:
+  sprite() = default;
+
+  sprite(sprite_atlas atlas, ntf::texture_atlas::texture tex) :
+    _atlas(atlas), _tex(tex) {}
+
+  sprite(ntf::resource_id atlas, ntf::texture_atlas::texture tex) :
+    _atlas(atlas), _tex(tex) {}
+
+  sprite(std::string_view atlas, ntf::texture_atlas::texture tex) :
+    _atlas(atlas), _tex(tex) {}
+
+public:
+  const ntf::texture_atlas::texture_meta& get_meta() const;
+  const ntf::texture2d& get_tex() const;
+
+  bool valid() const;
+  operator bool() const { return valid(); }
+
+private:
+  sprite_atlas _atlas;
+  ntf::texture_atlas::texture _tex{};
+};
+
+
+class font {
+public:
+  font() = default;
+
+  font(ntf::resource_id id) : _font(id) {}
+
+  font(std::string_view name);
+
+public:
+  ntf::resource_id id() const { return _font; }
+  const ntf::font& get() const;
+
+  bool valid() const;
+  operator bool() const { return valid(); }
+
+private:
+  ntf::resource_id _font;
+};
 
 } // namespace res

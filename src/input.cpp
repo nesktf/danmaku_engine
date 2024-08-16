@@ -5,7 +5,7 @@
 #define PRESSED(key) code == key && state == ntf::keystate::press
 
 static void frontend_input(ntf::keycode code, ntf::keystate state) {
-  auto& entry = frontend::state().entry();
+  auto& entry = frontend::instance().entry();
   if (PRESSED(ntf::key_s)) {
     entry.set_next_index();
   } else if (PRESSED(ntf::key_w)) {
@@ -14,7 +14,7 @@ static void frontend_input(ntf::keycode code, ntf::keystate state) {
   if (PRESSED(ntf::key_j)) {
     entry.on_click();
   } else if (PRESSED(ntf::key_k)) {
-    frontend::state().pop();
+    frontend::instance().pop();
   }
 }
 

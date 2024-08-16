@@ -20,7 +20,7 @@ struct global_state {
 
 void init();
 void tick();
-void start_stage();
+void start_stage(std::string path);
 void go_back();
 
 global_state& state();

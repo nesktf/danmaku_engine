@@ -22,9 +22,8 @@ void tick() {
   }
 }
 
-void start_stage() {
-  const char* script_path = "res/script/stage/test.lua";
-  _state.stage.load_env(script_path);
+void start_stage(std::string path) {
+  _state.stage.load_env(path);
   _state.current_state = global::states::gameplay;
 }
 

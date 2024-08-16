@@ -6,8 +6,14 @@
 static struct {
   ntf::resource_pool<ntf::shader_program> shaders;
   ntf::resource_pool<ntf::font> fonts;
-  ntf::resource_pool<ntf::spritesheet, ntf::spritesheet_data> sprites;
+  ntf::resource_pool<ntf::texture_atlas, ntf::texture_atlas_data> sprites;
 } resources;
+
+// static struct {
+//   ntf::shader_program shader;
+//   ntf::font font;
+//   ntf::texture_atlas atlas;
+// } res_fallback;
 
 static ntf::shader_program load_shader(std::string_view vert_path, std::string_view frag_path) {
   ntf::shader_program prog;
@@ -27,30 +33,29 @@ static ntf::shader_program load_shader(std::string_view vert_path, std::string_v
 
 static void load_shaders() {
   auto& shaders = resources.shaders;
+
   shaders.emplace("sprite", 
                   load_shader("res/shader/sprite.vs.glsl", "res/shader/sprite.fs.glsl"));
   shaders.emplace("font", 
                   load_shader("res/shader/font.vs.glsl", "res/shader/font.fs.glsl"));
   shaders.emplace("framebuffer", 
                   load_shader("res/shader/framebuffer.vs.glsl", "res/shader/framebuffer.fs.glsl"));
+  shaders.emplace("frontend", 
+                  load_shader("res/shader/frontend.vs.glsl", "res/shader/frontend.fs.glsl"));
 }
 
-static void prepare_default_textures() {
-  // haha funny source missing texture
-  uint8_t pixels[] = {0x0, 0x0, 0x0, 0xFE, 0x0, 0xFE, 0x0, 0x0, 0xFE, 0x0, 0xFE, 0x00};
-  ntf::texture2d default_tex{&pixels[0], ivec2{2, 2}, ntf::tex_format::rgb};
-  default_tex.set_filter(ntf::tex_filter::nearest);
-  default_tex.set_wrap(ntf::tex_wrap::repeat);
-  resources.sprites.emplace("default", std::move(default_tex));
-}
 
 static void load_sprites() {
   auto& sprites = resources.sprites;
   auto filter = ntf::tex_filter::nearest;
   auto wrap   = ntf::tex_wrap::repeat;
 
-  prepare_default_textures();
+  uint8_t pixels[] = {0x0, 0x0, 0x0, 0xFE, 0x0, 0xFE, 0x0, 0x0, 0xFE, 0x0, 0xFE, 0x00};
+  ntf::texture2d tex{&pixels[0], ivec2{2, 2}, ntf::tex_format::rgb};
+  tex.set_filter(ntf::tex_filter::nearest);
+  tex.set_wrap(ntf::tex_wrap::repeat);
 
+  sprites.emplace("default", std::move(tex));
   sprites.emplace("enemies", 
                   ntf::load_spritesheet("res/spritesheet/enemies.json", filter, wrap));
   sprites.emplace("effects", 
@@ -65,45 +70,89 @@ static void load_fonts() {
   fonts.emplace("arial", ntf::load_font("res/fonts/arial.ttf"));
 }
 
-void res::init() {
+static void init_fallback() {
+  // // Defautl atlas
+
+  // res_fallback.atlas = ntf::texture_atlas{std::move(tex)};
+}
+
+namespace res {
+
+void init() {
+  init_fallback();
   load_shaders();
   load_sprites();
   load_fonts();
 }
 
-res::spritesheet_id res::spritesheet_index(std::string_view name) {
-  return resources.sprites.id(name);
+
+shader::shader(std::string_view name) {
+  if (resources.shaders.has(name)) {
+    _shader = resources.shaders.id(name);
+  }
+}
+const ntf::shader_program& shader::get() const {
+  assert(valid() && "Invalid shader");
+  return resources.shaders[_shader];
+}
+bool shader::valid() const {
+  return _shader != 0 && resources.shaders.has(_shader);
 }
 
-const ntf::spritesheet& res::spritesheet_at(res::spritesheet_id sheet) {
-  return resources.sprites.at(sheet);
+
+sprite_atlas::sprite_atlas(std::string_view name) {
+  if (resources.sprites.has(name)) {
+    _atlas = resources.sprites.id(name);
+  }
+}
+const ntf::texture_atlas& sprite_atlas::get() const {
+  // assert(valid() && "Invalid atlas");
+  if (!valid()) {
+    ntf::log::debug("Attempt to get invalid atlas (id: {})", _atlas);
+    // return res_fallback.atlas;
+  }
+  return resources.sprites[_atlas];
+}
+bool sprite_atlas::valid() const {
+  return _atlas != 0 && resources.sprites.has(_atlas);
+}
+sprite sprite_atlas::at(ntf::texture_atlas::texture tex) const {
+  return sprite{*this, tex};
 }
 
-const ntf::spritesheet& res::spritesheet_at(std::string_view name) {
-  return resources.sprites.at(name);
+const ntf::texture_atlas::texture_meta& sprite::get_meta() const {
+  if (!valid()) {
+    ntf::log::warning("Attempt to get meta from invalid sprite (id: {}, atlas: {})", _tex, _atlas.id());
+    return resources.sprites[1][0];
+  }
+  return _atlas.get()[_tex];
+}
+const ntf::texture2d& sprite::get_tex() const {
+  if (!valid()) {
+    ntf::log::warning("Attempt to get texture from invalid sprite (id: {}, atlas: {})", _tex, _atlas.id());
+    return resources.sprites[1].tex();
+  }
+  return _atlas.get().tex();
+}
+bool sprite::valid() const {
+  return _atlas.valid() && _tex >= 1 && _atlas.get().size() <= _tex;
 }
 
-const ntf::spritesheet::sprite_data& res::sprite_data_at(res::sprite_id sprite) {
-  const auto& sheet = resources.sprites.at(sprite.sheet);
-  return sheet[sprite.index];
+font::font(std::string_view name) {
+  if (resources.fonts.has(name)) {
+    _font = resources.fonts.id(name);
+  }
+}
+const ntf::font& font::get() const {
+  // assert(valid() && "Invalid font");
+  if (!valid()) {
+    ntf::log::warning("Attempt to get invalid font (id: {})", _font);
+    // return res_fallback.font;
+  }
+  return resources.fonts[_font];
+}
+bool font::valid() const {
+  return _font != 0 && resources.fonts.has(_font);
 }
 
-res::shader_id res::shader_index(std::string_view name) {
-  return resources.shaders.id(name);
-}
-
-const ntf::shader_program& res::shader_at(res::shader_id shader) {
-  return resources.shaders.at(shader);
-}
-
-const ntf::shader_program& res::shader_at(std::string_view name) {
-  return resources.shaders.at(name);
-}
-
-res::font_id res::font_index(std::string_view name) {
-  return resources.fonts.id(name);
-}
-
-const ntf::font& res::font_at(font_id font) {
-  return resources.fonts.at(font);
-}
+} // namespace res
