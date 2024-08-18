@@ -1,6 +1,7 @@
+#include "render/ui/frontend.hpp"
+
 #include "global.hpp"
-#include "frontend.hpp"
-#include "package.hpp"
+#include "script/package.hpp"
 
 #include <shogle/engine.hpp>
 
@@ -22,17 +23,17 @@ static frontend::menu _build_package_view() {
       auto& t = m.back_transform;
       t.set_rot(t.rot() + PI*DT);
     },
-    .background = {2, 3},
+    .background = {1, 2},
     .back_transform = std::move(t),
   };
-  auto packages = package::parse_packages();
+  auto packages = script::package::parse_packages();
   if (packages.empty()) {
     menu.entries = {
       {.text = "go back", .on_click = [](auto&){frontend::instance().pop();}}
     };
   } else {
     for (const auto& package : packages) {
-      menu.entries.emplace_back(package, init_stage);
+      menu.entries.emplace_back(package.path().data(), init_stage);
     }
     menu.entries.emplace_back("go back", [](auto&){frontend::instance().pop();});
   }
@@ -55,7 +56,7 @@ static frontend::menu _build_settings() {
       auto& t = m.back_transform;
       t.set_rot(t.rot() + PI*DT);
     },
-    .background = {3, 3},
+    .background = {2, 2},
     .back_transform = std::move(t),
   };
 }
@@ -73,7 +74,7 @@ static frontend::menu _build_main_menu() {
       auto& t = m.back_transform;
       t.set_rot(t.rot() + PI*DT);
     },
-    .background = {3, 2},
+    .background = {2, 1},
     .back_transform = std::move(t),
   };
 }

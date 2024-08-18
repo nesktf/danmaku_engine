@@ -14,12 +14,12 @@ using ntf::mat4;
 using ntf::color3;
 using ntf::color4;
 
-using ntf::strmap;
-using std::vector;
+using frames = uint32_t;
+using frame_delay = int32_t;
 
 const constexpr uint UPS = 60;
 const constexpr float DT = 1.f/UPS;
 const constexpr ivec2 WIN_SIZE {1280, 720};
-const constexpr ivec2 VIEWPORT = {880, 660};
-// const constexpr ivec2 VIEWPORT {768, 896};
+// const constexpr ivec2 VIEWPORT = {880, 660};
+const constexpr ivec2 VIEWPORT {600, 700};
 const constexpr auto fb_ratio = 6.f/7.f;

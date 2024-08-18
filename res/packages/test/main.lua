@@ -24,7 +24,7 @@ local function shoot_danmaku()
 end
 
 local function main()
-  local vp = global.viewport
+  local vp = __VIEWPORT()
   __SPAWN_BOSS(50.0, pi, cmplx.new(-10, -10), cmplx.new(vp.x*0.5, vp.y*0.25))
   task.wait(60)
 

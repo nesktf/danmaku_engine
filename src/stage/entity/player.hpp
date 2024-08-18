@@ -2,7 +2,8 @@
 
 #include "core.hpp"
 #include "resources.hpp"
-#include "render.hpp"
+
+#include "render/render.hpp"
 
 #include <shogle/scene/transform.hpp>
 
@@ -18,7 +19,7 @@ public:
 public:
   void set_sprite(res::sprite sp) {
     _sprite = sp;
-    const auto& meta = _sprite.get_meta();
+    const auto& meta = _sprite.meta();
     transf.set_scale(meta.aspect()*scale);
   }
 

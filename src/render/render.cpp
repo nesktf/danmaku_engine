@@ -1,6 +1,8 @@
+#include "stage/state.hpp"
+
 #include "global.hpp"
 #include "render.hpp"
-#include "frontend.hpp"
+#include "render/ui/frontend.hpp"
 
 #include <shogle/engine.hpp>
 
@@ -170,11 +172,11 @@ public:
     ntf::render_set_uniform(_view_u, view);
     ntf::render_set_uniform(_model_u, transform.mat());
 
-    ntf::render_set_uniform(_offset_u, sprite.get_meta().offset);
+    ntf::render_set_uniform(_offset_u, sprite.meta().offset);
     ntf::render_set_uniform(_color_u, color4{1.f});
 
     ntf::render_set_uniform(_sampler_u, (int)sprite_sampler);
-    ntf::render_bind_sampler(sprite.get_tex(), (size_t)sprite_sampler);
+    ntf::render_bind_sampler(sprite.tex(), (size_t)sprite_sampler);
 
     ntf::render_draw_quad();
   }
@@ -224,8 +226,8 @@ static void render_gameplay(double dt) {
   _stage.bind(_window, []() {
     ntf::render_clear(color3{0.3f});
     auto& stage = global::state().stage;
-    auto& player = stage.player;
-    auto& boss = stage.boss;
+    auto& player = stage->player;
+    auto& boss = stage->boss;
 
     if (boss.ready()) {
       _renderer.draw_thing(boss, _stage.proj(), _stage.view());
@@ -233,7 +235,7 @@ static void render_gameplay(double dt) {
 
     _renderer.draw_thing(player, _stage.proj(), _stage.view());
 
-    for (auto& bullet : stage.projectiles) {
+    for (auto& bullet : stage->projectiles) {
       _renderer.draw_thing(bullet, _stage.proj(), _stage.view());
     }
   });
@@ -245,11 +247,11 @@ static void render_gameplay(double dt) {
   _stage.draw(_window);
 }
 
-static void render_frontend(double dt) {
+static void render_frontend([[maybe_unused]] double dt) {
   // TODO: Move this thing to a widget class
-  // const auto& back = res::sprite_atlas{}.get(); // give me the default
-  // _ui.tick(dt);
-  // _ui.draw_background(back, _window);
+  const auto& back = res::sprite_atlas{}.get(); // give me the default
+  _ui.tick(dt);
+  _ui.draw_background(back, _window);
 
   const auto& font = res::font{"arial"}.get(); // default
   const auto& font_shader = res::shader{"font"}.get();

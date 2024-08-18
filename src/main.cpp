@@ -1,9 +1,7 @@
 #include "global.hpp"
-
-#include "core.hpp"
 #include "resources.hpp"
-#include "render.hpp"
 #include "input.hpp"
+#include "render/render.hpp"
 
 static void destroy();
 static ntf::cleanup _ {[]{destroy();}};

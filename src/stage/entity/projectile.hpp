@@ -1,9 +1,9 @@
 #pragma once
 
 #include "resources.hpp"
-#include "render.hpp"
 
-#include "entity/movement.hpp"
+#include "render/render.hpp"
+#include "stage/entity/movement.hpp"
 
 #include <shogle/scene/transform.hpp>
 

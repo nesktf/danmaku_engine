@@ -1,6 +1,7 @@
 #include "global.hpp"
 #include "input.hpp"
-#include "frontend.hpp"
+
+#include "render/ui/frontend.hpp"
 
 #define PRESSED(key) code == key && state == ntf::keystate::press
 

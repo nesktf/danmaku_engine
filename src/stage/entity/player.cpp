@@ -1,4 +1,4 @@
-#include "player.hpp"
+#include "stage/entity/player.hpp"
 #include "input.hpp"
 #include "math.hpp"
 

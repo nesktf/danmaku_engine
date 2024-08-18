@@ -1,8 +1,8 @@
 #pragma once
 
-#include "stage.hpp"
+#include "core.hpp"
 
-#include "entity/player.hpp"
+namespace stage { class state; } // avoid sol propagation
 
 namespace global {
 
@@ -13,9 +13,10 @@ enum class states {
 };
 
 struct global_state {
-  uint frames{0};
   states current_state{states::loading};
-  stage::stage_state stage;
+  std::unique_ptr<stage::state> stage;
+  frames elapsed_ticks{0};
+  frames elapsed_frames{0};
 };
 
 void init();

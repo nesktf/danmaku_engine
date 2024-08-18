@@ -16,7 +16,8 @@ class shader {
 public:
   shader() = default;
 
-  shader(ntf::resource_id id) : _shader(id) {}
+  shader(ntf::resource_id id) :
+    _shader(id) {}
 
   shader(std::string_view name);
 
@@ -26,9 +27,31 @@ public:
 
   bool valid() const;
   operator bool() const { return valid(); }
+  operator const ntf::shader_program&() const { return get(); }
 
 private:
   ntf::resource_id _shader{};
+};
+
+
+class font {
+public:
+  font() = default;
+
+  font(ntf::resource_id id) : _font(id) {}
+
+  font(std::string_view name);
+
+public:
+  ntf::resource_id id() const { return _font; }
+  const ntf::font& get() const;
+
+  bool valid() const;
+  operator bool() const { return valid(); }
+  operator const ntf::font&() const { return get(); }
+
+private:
+  ntf::resource_id _font;
 };
 
 
@@ -37,17 +60,19 @@ class sprite_atlas {
 public:
   sprite_atlas() = default;
 
-  sprite_atlas(ntf::resource_id id) : _atlas(id) {}
+  sprite_atlas(ntf::resource_id id) :
+    _atlas(id) {}
 
   sprite_atlas(std::string_view name);
 
 public:
   ntf::resource_id id() const { return _atlas; }
   const ntf::texture_atlas& get() const;
-  sprite at(ntf::texture_atlas::texture tex) const;
 
+  sprite at(ntf::texture_atlas::texture tex) const;
   bool valid() const;
   operator bool() const { return valid(); }
+  operator const ntf::texture_atlas&() const { return get(); }
 
 public:
   static sprite_atlas default_atlas();
@@ -71,35 +96,19 @@ public:
     _atlas(atlas), _tex(tex) {}
 
 public:
-  const ntf::texture_atlas::texture_meta& get_meta() const;
-  const ntf::texture2d& get_tex() const;
+  ntf::resource_id id() const { return _tex; }
+
+  const ntf::texture_atlas::texture_meta& meta() const;
+  const sprite_atlas& atlas() const { return _atlas; }
+  const ntf::texture2d& tex() const;
 
   bool valid() const;
   operator bool() const { return valid(); }
+  operator const ntf::texture2d&() const { return tex(); }
 
 private:
   sprite_atlas _atlas;
   ntf::texture_atlas::texture _tex{};
-};
-
-
-class font {
-public:
-  font() = default;
-
-  font(ntf::resource_id id) : _font(id) {}
-
-  font(std::string_view name);
-
-public:
-  ntf::resource_id id() const { return _font; }
-  const ntf::font& get() const;
-
-  bool valid() const;
-  operator bool() const { return valid(); }
-
-private:
-  ntf::resource_id _font;
 };
 
 } // namespace res

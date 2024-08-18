@@ -1,4 +1,4 @@
-#include "entity/boss.hpp"
+#include "stage/entity/boss.hpp"
 
 namespace entity {
 
