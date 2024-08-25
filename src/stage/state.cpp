@@ -1,8 +1,6 @@
 #include "stage/state.hpp"
 #include "resources.hpp"
 
-#include <shogle/core/log.hpp>
-
 namespace stage {
 
 state::state(std::string_view stage_script) : _lua(this, stage_script) {

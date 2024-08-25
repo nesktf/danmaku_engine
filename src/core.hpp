@@ -1,6 +1,8 @@
 #pragma once
 
-#include <shogle/core/types.hpp>
+#include <shogle/math/alg.hpp>
+
+#include <shogle/engine.hpp>
 
 using ntf::vec2;
 using ntf::vec3;
@@ -16,6 +18,8 @@ using ntf::color4;
 
 using frames = uint32_t;
 using frame_delay = int32_t;
+
+using renderer = ntf::gl;
 
 const constexpr uint UPS = 60;
 const constexpr float DT = 1.f/UPS;

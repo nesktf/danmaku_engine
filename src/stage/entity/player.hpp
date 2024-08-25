@@ -3,7 +3,7 @@
 #include "core.hpp"
 #include "resources.hpp"
 
-#include "render/render.hpp"
+#include "render.hpp"
 
 #include <shogle/scene/transform.hpp>
 

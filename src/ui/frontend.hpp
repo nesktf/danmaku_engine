@@ -9,22 +9,6 @@
 
 #include <stack>
 
-namespace ui {
-
-class widget {
-public:
-  virtual void draw() = 0;
-  virtual void tick() {}
-
-public:
-  const mat4& transform() { return _transform.mat(); }
-
-protected:
-  ntf::transform2d _transform;
-};
-
-} // namespace ui
-
 class frontend : public ntf::singleton<frontend> {
 public:
   using menu_index = uint16_t;

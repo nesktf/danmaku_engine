@@ -2,15 +2,18 @@
 
 #include "core.hpp"
 
-#include <shogle/render/shader.hpp>
+#include <shogle/render/gl/shader.hpp>
+#include <shogle/render/gl/font.hpp>
+#include <shogle/render/gl/texture.hpp>
 
-#include <shogle/res/pool.hpp>
-#include <shogle/res/atlas.hpp>
-#include <shogle/res/font.hpp>
+#include <shogle/assets/pool.hpp>
+#include <shogle/assets/font.hpp>
+#include <shogle/assets/atlas.hpp>
 
 namespace res {
 
 void init();
+void destroy();
 
 class shader {
 public:
@@ -23,11 +26,11 @@ public:
 
 public:
   ntf::resource_id id() const { return _shader; }
-  const ntf::shader_program& get() const;
+  const renderer::shader_program& get() const;
 
   bool valid() const;
   operator bool() const { return valid(); }
-  operator const ntf::shader_program&() const { return get(); }
+  operator const renderer::shader_program&() const { return get(); }
 
 private:
   ntf::resource_id _shader{};
@@ -38,17 +41,18 @@ class font {
 public:
   font() = default;
 
-  font(ntf::resource_id id) : _font(id) {}
+  font(ntf::resource_id id) :
+    _font(id) {}
 
   font(std::string_view name);
 
 public:
   ntf::resource_id id() const { return _font; }
-  const ntf::font& get() const;
+  const renderer::font& get() const;
 
   bool valid() const;
   operator bool() const { return valid(); }
-  operator const ntf::font&() const { return get(); }
+  operator const renderer::font&() const { return get(); }
 
 private:
   ntf::resource_id _font;
@@ -67,12 +71,12 @@ public:
 
 public:
   ntf::resource_id id() const { return _atlas; }
-  const ntf::texture_atlas& get() const;
+  const ntf::texture_atlas<renderer::texture2d>& get() const;
 
-  sprite at(ntf::texture_atlas::texture tex) const;
+  sprite at(ntf::texture_atlas<renderer::texture2d>::texture tex) const;
   bool valid() const;
   operator bool() const { return valid(); }
-  operator const ntf::texture_atlas&() const { return get(); }
+  operator const ntf::texture_atlas<renderer::texture2d>&() const { return get(); }
 
 public:
   static sprite_atlas default_atlas();
@@ -86,29 +90,29 @@ class sprite {
 public:
   sprite() = default;
 
-  sprite(sprite_atlas atlas, ntf::texture_atlas::texture tex) :
+  sprite(sprite_atlas atlas, ntf::texture_atlas<renderer::texture2d>::texture tex) :
     _atlas(atlas), _tex(tex) {}
 
-  sprite(ntf::resource_id atlas, ntf::texture_atlas::texture tex) :
+  sprite(ntf::resource_id atlas, ntf::texture_atlas<renderer::texture2d>::texture tex) :
     _atlas(atlas), _tex(tex) {}
 
-  sprite(std::string_view atlas, ntf::texture_atlas::texture tex) :
+  sprite(std::string_view atlas, ntf::texture_atlas<renderer::texture2d>::texture tex) :
     _atlas(atlas), _tex(tex) {}
 
 public:
   ntf::resource_id id() const { return _tex; }
 
-  const ntf::texture_atlas::texture_meta& meta() const;
+  const ntf::texture_atlas<renderer::texture2d>::texture_meta& meta() const;
   const sprite_atlas& atlas() const { return _atlas; }
-  const ntf::texture2d& tex() const;
+  const renderer::texture2d& tex() const;
 
   bool valid() const;
   operator bool() const { return valid(); }
-  operator const ntf::texture2d&() const { return tex(); }
+  operator const renderer::texture2d&() const { return tex(); }
 
 private:
   sprite_atlas _atlas;
-  ntf::texture_atlas::texture _tex{};
+  ntf::texture_atlas<renderer::texture2d>::texture _tex{};
 };
 
 } // namespace res

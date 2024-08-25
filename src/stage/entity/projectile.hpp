@@ -2,7 +2,7 @@
 
 #include "resources.hpp"
 
-#include "render/render.hpp"
+#include "render.hpp"
 #include "stage/entity/movement.hpp"
 
 #include <shogle/scene/transform.hpp>
@@ -22,7 +22,7 @@ public:
     auto new_pos = _transform.cpos();
     _move(new_pos);
     _transform.set_pos(new_pos)
-      .set_rot(_transform.rot() + PI/60);
+      .set_rot(_transform.rot() + M_PIf/60);
   }
 
 public:

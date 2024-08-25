@@ -1,4 +1,4 @@
-#include "render/ui/frontend.hpp"
+#include "ui/frontend.hpp"
 
 #include "global.hpp"
 #include "script/package.hpp"
@@ -10,7 +10,7 @@ static void init_stage(frontend::menu_entry& entry) {
 }
 
 static void close_game(frontend::menu_entry&) {
-  ntf::engine_close_window();
+  // ntf::engine_close_window();
 }
 
 static frontend::menu _build_package_view() {
@@ -21,7 +21,7 @@ static frontend::menu _build_package_view() {
     .entries = {},
     .on_tick = [](frontend::menu& m){
       auto& t = m.back_transform;
-      t.set_rot(t.rot() + PI*DT);
+      t.set_rot(t.rot() + M_PIf*DT);
     },
     .background = {1, 2},
     .back_transform = std::move(t),
@@ -54,7 +54,7 @@ static frontend::menu _build_settings() {
     },
     .on_tick = [](frontend::menu& m){
       auto& t = m.back_transform;
-      t.set_rot(t.rot() + PI*DT);
+      t.set_rot(t.rot() + M_PIf*DT);
     },
     .background = {2, 2},
     .back_transform = std::move(t),
@@ -72,7 +72,7 @@ static frontend::menu _build_main_menu() {
     },
     .on_tick = [](frontend::menu& m){
       auto& t = m.back_transform;
-      t.set_rot(t.rot() + PI*DT);
+      t.set_rot(t.rot() + M_PIf*DT);
     },
     .background = {2, 1},
     .back_transform = std::move(t),

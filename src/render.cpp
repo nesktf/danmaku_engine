@@ -2,11 +2,11 @@
 
 #include "global.hpp"
 #include "render.hpp"
-#include "render/ui/frontend.hpp"
+#include "ui/frontend.hpp"
 
 #include <shogle/engine.hpp>
 
-#include <shogle/render/framebuffer.hpp>
+#include <shogle/render/gl/framebuffer.hpp>
 
 #include <shogle/scene/camera.hpp>
 
@@ -42,7 +42,7 @@ public:
 public:
   void update_viewport(ivec2 vp_size, ivec2 center) {
     _cam_center = (vec2)center;
-    _viewport = ntf::framebuffer{(size_t)vp_size.x, (size_t)vp_size.y};
+    _viewport = renderer::framebuffer{vp_size};
     _proj = glm::ortho(0.f, (float)vp_size.x, (float)vp_size.y, 0.f, -10.f, 1.f);
     _view = ntf::view2d((vec2)_viewport.size()*.5f, _cam_center, vec2{1.f}, 0.f);
     _transform.set_scale((vec2)vp_size);
@@ -62,13 +62,18 @@ public:
     const auto& shader = _shader.get();
     const auto sampler = 0;
 
-    ntf::render_use_shader(shader);
-    ntf::render_set_uniform(shader, "proj", window.proj);
-    ntf::render_set_uniform(shader, "view", mat4{1.f});
-    ntf::render_set_uniform(shader, "model", _transform.mat());
-    ntf::render_set_uniform(shader, "fb_sampler", (int)sampler);
-    ntf::render_bind_sampler(_viewport.tex(), (size_t)sampler);
-    ntf::render_draw_quad();
+    shader.use();
+    shader.set_uniform("proj", window.proj);
+    shader.set_uniform("view", mat4{1.f});
+    shader.set_uniform("model", _transform.mat());
+    shader.set_uniform("fb_sampler", (int)sampler);
+    _viewport.tex().bind_sampler((size_t)sampler);
+
+    renderer::draw_quad();
+  }
+
+  void destroy() {
+    _viewport.unload();
   }
 
 public:
@@ -78,7 +83,7 @@ public:
 private:
   mat4 _proj;
   mat4 _view;
-  ntf::framebuffer _viewport;
+  renderer::framebuffer _viewport;
   ntf::transform2d _transform;
   vec2 _cam_center;
   res::shader _shader;
@@ -91,11 +96,11 @@ public:
     _back_shader(back_shader) {
     const auto& sh = _back_shader.get();
 
-    _proj_u = sh.uniform_location("proj");
-    _model_u = sh.uniform_location("model");
+    sh.uniform_location(_proj_u, "proj");
+    sh.uniform_location(_model_u, "model");
 
-    _time_u = sh.uniform_location("time");
-    _sampler_u = sh.uniform_location("tex");
+    sh.uniform_location(_time_u, "time");
+    sh.uniform_location(_sampler_u, "tex");
 
     _ui_root.set_pos((vec2)win.size*.5f).set_scale(win.size);
   }
@@ -105,31 +110,30 @@ public:
     _back_time += dt;
   }
 
-  void draw_background(const ntf::texture2d& tex, const window_viewport& win) {
+  void draw_background(const renderer::texture2d& tex, const window_viewport& win) {
     const auto& shader = _back_shader.get();
     const auto sampler = 0;
 
-    ntf::render_use_shader(shader);
-    ntf::render_set_uniform(shader, "proj", win.proj);
-    ntf::render_set_uniform(shader, "model", _ui_root.mat());
-    ntf::render_set_uniform(shader, "time", _back_time);
+    shader.use();
+    shader.set_uniform(_proj_u, win.proj);
+    shader.set_uniform(_model_u, _ui_root.mat());
+    shader.set_uniform(_time_u, _back_time);
+    shader.set_uniform(_sampler_u, (int)sampler);
+    tex.bind_sampler((size_t)sampler);
 
-    ntf::render_set_uniform(shader, "tex", (int)sampler);
-    ntf::render_bind_sampler(tex, (size_t)sampler);
-
-    ntf::render_draw_quad();
+    renderer::draw_quad();
   }
 
-  void draw_widget(ui::widget* widget) {
-    widget->draw();
-  }
+  // void draw_widget(ui::widget* widget) {
+  //   widget->draw();
+  // }
 
 private:
   res::shader _back_shader;
   float _back_time{0};
   ntf::transform2d _ui_root;
-  ntf::shader_uniform _proj_u, _model_u;
-  ntf::shader_uniform _time_u, _sampler_u;
+  renderer::shader_uniform _proj_u, _model_u;
+  renderer::shader_uniform _time_u, _sampler_u;
 };
 
 class sprite_render {
@@ -138,13 +142,12 @@ public:
   sprite_render(std::string_view shader) : _base_shader(shader) {
     const auto& sh = _base_shader.get();
 
-    _proj_u = sh.uniform_location("proj");
-    _view_u = sh.uniform_location("view");
-    _model_u = sh.uniform_location("model");
-
-    _offset_u = sh.uniform_location("offset");
-    _color_u = sh.uniform_location("sprite_color");
-    _sampler_u = sh.uniform_location("sprite_sampler");
+    sh.uniform_location(_proj_u, "proj");
+    sh.uniform_location(_view_u, "view");
+    sh.uniform_location(_model_u, "model");
+    sh.uniform_location(_offset_u, "offset");
+    sh.uniform_location(_color_u, "sprite_color");
+    sh.uniform_location(_sampler_u, "sprite_sampler");
   }
 
 public:
@@ -166,25 +169,22 @@ public:
     const auto& shader = _base_shader.get();
     const auto sprite_sampler = 0;
 
-    ntf::render_use_shader(shader);
+    shader.use();
+    shader.set_uniform(_proj_u, proj);
+    shader.set_uniform(_view_u, view);
+    shader.set_uniform(_model_u, transform.mat());
+    shader.set_uniform(_offset_u, sprite.meta().offset);
+    shader.set_uniform(_color_u, color4{1.f});
+    shader.set_uniform(_sampler_u, (int)sprite_sampler);
+    sprite.tex().bind_sampler((size_t)sprite_sampler);
 
-    ntf::render_set_uniform(_proj_u, proj);
-    ntf::render_set_uniform(_view_u, view);
-    ntf::render_set_uniform(_model_u, transform.mat());
-
-    ntf::render_set_uniform(_offset_u, sprite.meta().offset);
-    ntf::render_set_uniform(_color_u, color4{1.f});
-
-    ntf::render_set_uniform(_sampler_u, (int)sprite_sampler);
-    ntf::render_bind_sampler(sprite.tex(), (size_t)sprite_sampler);
-
-    ntf::render_draw_quad();
+    renderer::draw_quad();
   }
 
 private:
   res::shader _base_shader;
-  ntf::shader_uniform _proj_u, _view_u, _model_u;
-  ntf::shader_uniform _offset_u, _color_u, _sampler_u; // TODO: get rid of the color unif
+  renderer::shader_uniform _proj_u, _view_u, _model_u;
+  renderer::shader_uniform _offset_u, _color_u, _sampler_u; // TODO: get rid of the color unif
 };
 
 } // namespace
@@ -194,28 +194,24 @@ static stage_render _stage;
 static ui_render _ui;
 static sprite_render _renderer;
 
-static void update_viewport(size_t w, size_t h) {
-  ntf::render_viewport(w, h);
+void render::viewport_event(size_t w, size_t h) {
+  renderer::set_viewport(w, h);
   _window.update(ivec2{w, h});
   _stage.update_pos(vec2(w,h)*.5f);
 }
 
 void render::destroy() {
-  ntf::engine_destroy();
+  _stage.destroy();
 }
 
-void render::init() {
+void render::init(ntf::glfw::window<renderer>&) {
   // Load OpenGL and things
-  ntf::engine_init(WIN_SIZE.x, WIN_SIZE.y, "test");
-  ntf::engine_viewport_event(update_viewport);
-
-  ntf::engine_use_vsync(false);
-  ntf::render_blending(true);
+  renderer::set_blending(true);
 }
 
-void render::post_init() {
+void render::post_init(ntf::glfw::window<renderer>& win) {
   // Prepare shaders and things
-  auto vp = ntf::engine_window_size();
+  auto vp = win.size();
   _window = window_viewport{vp};
   _stage = stage_render{VIEWPORT, VIEWPORT/2, (vec2)vp*0.5f, "framebuffer"};
   _renderer = sprite_render{"sprite"};
@@ -224,7 +220,7 @@ void render::post_init() {
 
 static void render_gameplay(double dt) {
   _stage.bind(_window, []() {
-    ntf::render_clear(color3{0.3f});
+    renderer::clear_viewport(color3{0.3f});
     auto& stage = global::state().stage;
     auto& player = stage->player;
     auto& boss = stage->boss;
@@ -271,21 +267,20 @@ static void render_frontend([[maybe_unused]] double dt) {
     const vec2 pos {100.0f,i*50.0f + 200.0f};
     font_transform.set_pos(pos);
 
-    ntf::render_use_shader(font_shader);
-    
-    ntf::render_set_uniform(font_shader, "proj", _window.proj);
-    ntf::render_set_uniform(font_shader, "model", font_transform.mat());
-    ntf::render_set_uniform(font_shader, "text_color", col);
-
     const auto shader_sampler = 0;
-    ntf::render_set_uniform(font_shader, "tex", (int)shader_sampler);
-    ntf::render_draw_text(font, vec2{0.0f, 0.0f}, 1.0f, menu.entries[i].text);
+
+    font_shader.use();
+    font_shader.set_uniform("proj", _window.proj);
+    font_shader.set_uniform("model", font_transform.mat());
+    font_shader.set_uniform("text_color", col);
+    font_shader.set_uniform("tex", (int)shader_sampler);
+    font.draw_text(vec2{0.f, 0.f}, 1.f, menu.entries[i].text);
   }
 }
 
 
 void render::draw([[maybe_unused]] double dt, [[maybe_unused]] double alpha) {
-  ntf::render_clear(color3{0.2f});
+  renderer::clear_viewport(color3{.2f});
 
   switch (global::state().current_state) {
     case global::states::frontend: {

@@ -1,32 +1,35 @@
 #include "global.hpp"
 #include "input.hpp"
 
-#include "render/ui/frontend.hpp"
+#include "ui/frontend.hpp"
 
-#define PRESSED(key) code == key && state == ntf::keystate::press
+#define PRESSED(key) code == key && state == input::keystate::press
 
-static void frontend_input(ntf::keycode code, ntf::keystate state) {
+static void frontend_input(input::keycode code, input::keystate state) {
   auto& entry = frontend::instance().entry();
-  if (PRESSED(ntf::key_s)) {
+  if (PRESSED(input::keycode::key_s)) {
     entry.set_next_index();
-  } else if (PRESSED(ntf::key_w)) {
+  } else if (PRESSED(input::keycode::key_w)) {
     entry.set_prev_index();
   }
-  if (PRESSED(ntf::key_j)) {
+  if (PRESSED(input::keycode::key_j)) {
     entry.on_click();
-  } else if (PRESSED(ntf::key_k)) {
+  } else if (PRESSED(input::keycode::key_k)) {
     frontend::instance().pop();
   }
 }
 
-static void gameplay_input(ntf::keycode code, ntf::keystate state) {
-  if (PRESSED(ntf::key_i)) {
+static void gameplay_input(input::keycode code, input::keystate state) {
+  if (PRESSED(input::keycode::key_i)) {
     global::go_back();
   }
 }
 
-void input::init() {
-  ntf::engine_key_event([](ntf::keycode code, auto, ntf::keystate state, auto) {
+static ntf::glfw::window<renderer>* win; // ugly
+
+void input::init(ntf::glfw::window<renderer>& window) {
+  win = &window;
+  window.set_key_event([&](input::keycode code, auto, input::keystate state, auto) {
     switch (global::state().current_state) {
       case global::states::loading: {
         break;
@@ -41,8 +44,12 @@ void input::init() {
       }
     }
 
-    if (code == ntf::key_escape && state == ntf::press) {
-      ntf::engine_close_window();
+    if (code == input::keycode::key_escape && state == input::keystate::press) {
+      window.close();
     }
   });
+}
+
+bool input::poll_key(keycode code, keystate state) {
+  return win->poll_key(code, state);
 }
