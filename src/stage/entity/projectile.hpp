@@ -28,14 +28,15 @@ public:
 public:
   ntf::transform2d& transform() { return _transform; }
   res::sprite sprite() const { return _sprite; }
-  render::shader_renderer* renderer() { return _renderer; }
 
   uint birth() { return _birth; }
+
+  const renderer::uniform_tuple& uniforms() const { return _uniforms; }
 
 private:
   res::sprite _sprite;
   ntf::transform2d _transform;
-  render::shader_renderer* _renderer{nullptr};
+  renderer::uniform_tuple _uniforms;
 
   movement _move;
   uint _birth;

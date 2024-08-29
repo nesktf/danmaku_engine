@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core.hpp"
+#include "global.hpp"
 #include "resources.hpp"
 
 #include "render.hpp"
@@ -61,14 +61,15 @@ public:
 public:
   ntf::transform2d& transform() { return _transform; }
   res::sprite sprite() { return _sprite; }
-  render::shader_renderer* renderer() { return _renderer; }
+
+  const renderer::uniform_tuple& uniforms() const { return _uniforms; }
 
   bool ready() const { return _ready; }
   
 private:
   res::sprite _sprite;
   ntf::transform2d _transform;
-  render::shader_renderer* _renderer{nullptr};
+  renderer::uniform_tuple _uniforms;
 
   bool _ready {false};
   movement _move;

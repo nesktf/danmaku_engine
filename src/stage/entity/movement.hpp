@@ -6,33 +6,8 @@ namespace entity {
 
 class movement {
 public:
-  cmplx operator()(cmplx& pos) {
-    const auto v0 = velocity;
-    pos += v0;
-    velocity = acceleration + retention*velocity;
-
-    if (attraction != cmplx{}) {
-      const auto av = attraction_point - pos;
-      if (attraction_exponent == 1) {
-        velocity += attraction*av;
-      } else {
-        float norm2 = math::norm2(av);
-        norm2 = std::pow(norm2, attraction_exponent - 0.5);
-        velocity += attraction + (av*norm2);
-      }
-    }
-    return v0;
-  }
-
-  cmplx operator()(cmplx& pos, uint times) {
-    const auto v0 = velocity;
-    
-    for (uint i = 0; i < times; ++i) {
-      (*this)(pos);
-    }
-
-    return v0;
-  }
+  cmplx operator()(cmplx& pos);
+  cmplx operator()(cmplx& pos, uint times);
 
 public:
   cmplx velocity{}, acceleration{};
@@ -41,6 +16,34 @@ public:
   cmplx attraction{}, attraction_point{};
   float attraction_exponent{};
 };
+
+inline cmplx movement::operator()(cmplx& pos) {
+  const auto v0 = velocity;
+  pos += v0;
+  velocity = acceleration + retention*velocity;
+
+  if (attraction != cmplx{}) {
+    const auto av = attraction_point - pos;
+    if (attraction_exponent == 1) {
+      velocity += attraction*av;
+    } else {
+      float norm2 = math::norm2(av);
+      norm2 = std::pow(norm2, attraction_exponent - 0.5);
+      velocity += attraction + (av*norm2);
+    }
+  }
+  return v0;
+}
+
+inline cmplx movement::operator()(cmplx& pos, uint times) {
+  const auto v0 = velocity;
+  
+  for (uint i = 0; i < times; ++i) {
+    (*this)(pos);
+  }
+
+  return v0;
+}
 
 inline movement move_linear(cmplx vel) {
   return movement {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core.hpp"
+#include "global.hpp"
 
 #include <shogle/render/gl/shader.hpp>
 #include <shogle/render/gl/font.hpp>
@@ -14,6 +14,16 @@ namespace res {
 
 void init();
 void destroy();
+
+void request_shader(std::string name, std::string vert_path, std::string frag_path);
+void request_font(std::string name, std::string path);
+void request_atlas(std::string name, std::string path);
+
+void set_callback(std::function<void()> cb);
+
+void start_loading();
+
+void do_requests();
 
 class shader {
 public:

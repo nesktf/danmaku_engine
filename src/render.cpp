@@ -66,6 +66,7 @@ public:
     shader.set_uniform("proj", window.proj);
     shader.set_uniform("view", mat4{1.f});
     shader.set_uniform("model", _transform.mat());
+
     shader.set_uniform("fb_sampler", (int)sampler);
     _viewport.tex().bind_sampler((size_t)sampler);
 
@@ -118,15 +119,12 @@ public:
     shader.set_uniform(_proj_u, win.proj);
     shader.set_uniform(_model_u, _ui_root.mat());
     shader.set_uniform(_time_u, _back_time);
+
     shader.set_uniform(_sampler_u, (int)sampler);
     tex.bind_sampler((size_t)sampler);
 
     renderer::draw_quad();
   }
-
-  // void draw_widget(ui::widget* widget) {
-  //   widget->draw();
-  // }
 
 private:
   res::shader _back_shader;
@@ -152,29 +150,44 @@ public:
 
 public:
   template<typename Obj>
-  void draw_thing(Obj&& renderable, const mat4& proj, const mat4& view) {
+  void draw_thing(Obj&& renderable, const mat4& proj, const mat4& view) const {
     auto& transform = renderable.transform();
     const auto sprite = renderable.sprite();
-    const auto* renderer = renderable.renderer();
+    const auto& uniforms = renderable.uniforms();
 
-    [[unlikely]] if (renderer != nullptr) { // ?????
-      renderer->render(sprite, transform, proj, view);
+    const auto& shader = _base_shader.get();
+    const auto sprite_sampler = 0;
+
+    shader.use();
+    if (uniforms) {
+      uniforms.bind(shader);
+      // TODO: Find another way to bind samplers?
+      renderer::draw_quad();
     } else {
-      _draw_thing_default(sprite, transform, proj, view);
+      shader.set_uniform(_proj_u, proj);
+      shader.set_uniform(_view_u, view);
+      shader.set_uniform(_model_u, transform.mat());
+      shader.set_uniform(_offset_u, sprite.meta().offset);
+      shader.set_uniform(_color_u, color4{1.f});
     }
+
+    shader.set_uniform(_sampler_u, (int)sprite_sampler);
+    sprite.tex().bind_sampler((size_t)sprite_sampler);
+
+    renderer::draw_quad();
   }
 
-  void _draw_thing_default(res::sprite sprite, ntf::transform2d& transform, 
-                           const mat4& proj, const mat4& view) {
+  void draw_sprite(res::sprite sprite, const mat4& model, const mat4& proj, const mat4& view) const {
     const auto& shader = _base_shader.get();
     const auto sprite_sampler = 0;
 
     shader.use();
     shader.set_uniform(_proj_u, proj);
     shader.set_uniform(_view_u, view);
-    shader.set_uniform(_model_u, transform.mat());
+    shader.set_uniform(_model_u, model);
     shader.set_uniform(_offset_u, sprite.meta().offset);
     shader.set_uniform(_color_u, color4{1.f});
+
     shader.set_uniform(_sampler_u, (int)sprite_sampler);
     sprite.tex().bind_sampler((size_t)sprite_sampler);
 
@@ -194,19 +207,19 @@ static stage_render _stage;
 static ui_render _ui;
 static sprite_render _renderer;
 
-void render::viewport_event(size_t w, size_t h) {
-  renderer::set_viewport(w, h);
-  _window.update(ivec2{w, h});
-  _stage.update_pos(vec2(w,h)*.5f);
-}
-
 void render::destroy() {
   _stage.destroy();
 }
 
-void render::init(ntf::glfw::window<renderer>&) {
+void render::init(ntf::glfw::window<renderer>& window) {
   // Load OpenGL and things
   renderer::set_blending(true);
+
+  window.set_viewport_event([](size_t w, size_t h) {
+    renderer::set_viewport(w, h);
+    _window.update(ivec2{w, h});
+    _stage.update_pos(vec2(w,h)*.5f);
+  });
 }
 
 void render::post_init(ntf::glfw::window<renderer>& win) {
@@ -253,8 +266,7 @@ static void render_frontend([[maybe_unused]] double dt) {
   const auto& font_shader = res::shader{"font"}.get();
 
   auto& menu = frontend::instance().entry();
-  _renderer._draw_thing_default(menu.background, menu.back_transform, 
-                                _stage.proj(), _stage.view());
+  _renderer.draw_sprite(menu.background, menu.back_transform.mat(), _stage.proj(), _stage.view());
 
   for (size_t i = 0; i < menu.entries.size(); ++i) {
     const auto focused_index = menu.focused;
@@ -279,7 +291,7 @@ static void render_frontend([[maybe_unused]] double dt) {
 }
 
 
-void render::draw([[maybe_unused]] double dt, [[maybe_unused]] double alpha) {
+void render::draw(window&, [[maybe_unused]] double dt, [[maybe_unused]] double alpha) {
   renderer::clear_viewport(color3{.2f});
 
   switch (global::state().current_state) {

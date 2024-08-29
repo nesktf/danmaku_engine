@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core.hpp"
+#include "global.hpp"
 
 #include <shogle/engine.hpp>
 

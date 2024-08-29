@@ -2,7 +2,7 @@
 
 #include <sol/sol.hpp>
 
-#include "core.hpp"
+#include "global.hpp"
 
 namespace stage {
 
