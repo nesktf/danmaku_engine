@@ -48,11 +48,14 @@ void lua_env::_populate_globals(stage::state* stage) {
 
   // Boss functions
   _lua.set_function("__SPAWN_BOSS", [stage](float scale, float ang_speed, sol::table p0, sol::table p1) {
-    const auto atlas_id = res::sprite_atlas{"effects"};
-    const auto& atlas = atlas_id.get();
-    const auto index = atlas.group_at("stars_small")[0];
+    auto atlas_id = res::atlas_from_name("effects");
+    auto group_handle = atlas_id->get().find_group("stars_small");
+    const auto index = atlas_id->get().group_at(group_handle.value())[0];
 
-    stage->boss.set_sprite(res::sprite{atlas_id, index});
+    stage->boss.set_sprite(res::sprite{
+      .atlas_handle = atlas_id.value(),
+      .atlas_index = index,
+    });
 
     stage->boss.set_scale(scale);
     stage->boss.set_angular_speed(ang_speed);
@@ -84,12 +87,14 @@ void lua_env::_populate_globals(stage::state* stage) {
     cmplx proj_dir = cmplx{dir.get<float>("real"), dir.get<float>("imag")};
     cmplx proj_pos = cmplx{pos.get<float>("real"), pos.get<float>("imag")};
 
-    const auto atlas_id = res::sprite_atlas{"effects"};
-    const auto& atlas = atlas_id.get();
-    const auto index = atlas.group_at("stars_small")[1];
-
-
-    stage->projectiles.emplace_back(res::sprite{atlas_id, index}, 
+    auto atlas_id = res::atlas_from_name("effects");
+    auto group_handle = atlas_id->get().find_group("stars_small");
+    const auto index = atlas_id->get().group_at(group_handle.value())[0];
+    
+    stage->projectiles.emplace_back(res::sprite{
+      .atlas_handle = atlas_id.value(),
+      .atlas_index = index,
+      }, 
       entity::move_linear(proj_dir*speed), proj_pos, stage->ticks());
   });
 

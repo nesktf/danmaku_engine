@@ -38,13 +38,14 @@ int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
   // Common init
   render::init(window);
   input::init(window); // after global?
-  res::init();
+  res::init([&](){
+    render::post_init(window);
 
-  // global init
-  frontend::init();
-  global::_state.current_state = global::states::frontend;
+    // global init
+    frontend::init();
+    global::_state.current_state = global::states::frontend;
+  });
 
-  render::post_init(window);
 
   auto render_fun = [&](double dt, double alpha) {
     imgui.start_frame();
@@ -54,6 +55,7 @@ int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
 
   auto tick_fun = [&]() {
     global::_state.elapsed_ticks++;
+    res::do_requests();
 
     switch(global::_state.current_state) {
       case global::states::gameplay: {

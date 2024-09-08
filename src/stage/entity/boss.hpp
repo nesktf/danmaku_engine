@@ -33,7 +33,7 @@ public:
 public:
   void set_sprite(res::sprite spr) {
     _sprite = spr;
-    const auto& meta = spr.meta();
+    const auto& meta = spr.atlas_handle.get().at(spr.atlas_index);
     _transform.set_scale(meta.aspect()*_scale);
   }
 

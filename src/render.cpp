@@ -33,8 +33,7 @@ public:
 class stage_render {
 public:
   stage_render() = default;
-  stage_render(ivec2 vp_size, ivec2 center, vec2 pos, std::string_view shader_name) :
-    _shader(shader_name) {
+  stage_render(ivec2 vp_size, ivec2 center, vec2 pos, res::shader shader) : _shader(shader) {
     update_viewport(vp_size, center);
     update_pos(pos);
   }
@@ -93,8 +92,7 @@ private:
 class ui_render {
 public:
   ui_render() = default;
-  ui_render(const window_viewport& win, std::string_view back_shader) : 
-    _back_shader(back_shader) {
+  ui_render(const window_viewport& win, res::shader back_shader) : _back_shader(back_shader) {
     const auto& sh = _back_shader.get();
 
     sh.uniform_location(_proj_u, "proj");
@@ -137,7 +135,7 @@ private:
 class sprite_render {
 public:
   sprite_render() = default;
-  sprite_render(std::string_view shader) : _base_shader(shader) {
+  sprite_render(res::shader base_shader) : _base_shader(base_shader) {
     const auto& sh = _base_shader.get();
 
     sh.uniform_location(_proj_u, "proj");
@@ -158,6 +156,7 @@ public:
     const auto& shader = _base_shader.get();
     const auto sprite_sampler = 0;
 
+    const auto& atlas = sprite.atlas_handle.get();
     shader.use();
     if (uniforms) {
       uniforms.bind(shader);
@@ -167,17 +166,18 @@ public:
       shader.set_uniform(_proj_u, proj);
       shader.set_uniform(_view_u, view);
       shader.set_uniform(_model_u, transform.mat());
-      shader.set_uniform(_offset_u, sprite.meta().offset);
+      shader.set_uniform(_offset_u, atlas.at(sprite.atlas_index).offset);
       shader.set_uniform(_color_u, color4{1.f});
     }
 
     shader.set_uniform(_sampler_u, (int)sprite_sampler);
-    sprite.tex().bind_sampler((size_t)sprite_sampler);
+    atlas.texture().bind_sampler((size_t)sprite_sampler);
 
     renderer::draw_quad();
   }
 
   void draw_sprite(res::sprite sprite, const mat4& model, const mat4& proj, const mat4& view) const {
+    const auto& atlas = sprite.atlas_handle.get();
     const auto& shader = _base_shader.get();
     const auto sprite_sampler = 0;
 
@@ -185,11 +185,11 @@ public:
     shader.set_uniform(_proj_u, proj);
     shader.set_uniform(_view_u, view);
     shader.set_uniform(_model_u, model);
-    shader.set_uniform(_offset_u, sprite.meta().offset);
+    shader.set_uniform(_offset_u, atlas.at(sprite.atlas_index).offset);
     shader.set_uniform(_color_u, color4{1.f});
 
     shader.set_uniform(_sampler_u, (int)sprite_sampler);
-    sprite.tex().bind_sampler((size_t)sprite_sampler);
+    atlas.texture().bind_sampler((size_t)sprite_sampler);
 
     renderer::draw_quad();
   }
@@ -224,11 +224,15 @@ void render::init(ntf::glfw::window<renderer>& window) {
 
 void render::post_init(ntf::glfw::window<renderer>& win) {
   // Prepare shaders and things
+  auto fb_shader = res::shader_from_name("framebuffer");
+  auto sprite_shader = res::shader_from_name("sprite");
+  auto front_shader = res::shader_from_name("frontend");
+
   auto vp = win.size();
   _window = window_viewport{vp};
-  _stage = stage_render{VIEWPORT, VIEWPORT/2, (vec2)vp*0.5f, "framebuffer"};
-  _renderer = sprite_render{"sprite"};
-  _ui = ui_render{_window, "frontend"};
+  _stage = stage_render{VIEWPORT, VIEWPORT/2, (vec2)vp*0.5f, fb_shader.value()};
+  _renderer = sprite_render{sprite_shader.value()};
+  _ui = ui_render{_window, front_shader.value()};
 }
 
 static void render_gameplay(double dt) {
@@ -249,7 +253,7 @@ static void render_gameplay(double dt) {
     }
   });
 
-  const auto& back = res::sprite_atlas{}.get();
+  const auto& back = res::texture{0}.get();
   _ui.tick(dt);
   _ui.draw_background(back, _window);
 
@@ -258,12 +262,12 @@ static void render_gameplay(double dt) {
 
 static void render_frontend([[maybe_unused]] double dt) {
   // TODO: Move this thing to a widget class
-  const auto& back = res::sprite_atlas{}.get(); // give me the default
+  const auto& back = res::texture{0}.get();
   _ui.tick(dt);
   _ui.draw_background(back, _window);
 
-  const auto& font = res::font{"arial"}.get(); // default
-  const auto& font_shader = res::shader{"font"}.get();
+  const auto& font = res::font_from_name("arial")->get();
+  const auto& font_shader = res::shader_from_name("font")->get();
 
   auto& menu = frontend::instance().entry();
   _renderer.draw_sprite(menu.background, menu.back_transform.mat(), _stage.proj(), _stage.view());

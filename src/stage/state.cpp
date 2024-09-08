@@ -6,7 +6,10 @@ namespace stage {
 state::state(std::string_view stage_script) : _lua(this, stage_script) {
   player.set_pos((vec2)VIEWPORT*0.5f);
   player.set_scale(40.0f);
-  player.set_sprite(res::sprite{0, 0});
+  player.set_sprite(res::sprite{
+    .atlas_handle = res::atlas_from_name("effects").value(),
+    .atlas_index = 0,
+  });
 }
 
 void state::state::tick() {
