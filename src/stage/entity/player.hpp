@@ -19,7 +19,7 @@ public:
 public:
   void set_sprite(res::sprite sp) {
     _sprite = sp;
-    const auto& meta = sp.atlas_handle.get().at(sp.atlas_index);
+    const auto& meta = sp.handle.get().at(sp.index);
     transf.set_scale(meta.aspect()*scale);
   }
 
@@ -34,6 +34,7 @@ public:
 
   ntf::transform2d& transform() { return transf; }
   res::sprite sprite() const { return _sprite; }
+  uint birth() const { return _birth; }
 
   const renderer::uniform_tuple& uniforms() const { return _uniforms; }
 
@@ -45,6 +46,7 @@ public:
   float scale {40.0f};
   float speed_factor{450.0f};
   bool shifting{false};
+  uint _birth{0};
 };
 
 } // namespace entity

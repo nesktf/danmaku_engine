@@ -53,8 +53,8 @@ void lua_env::_populate_globals(stage::state* stage) {
     const auto index = atlas_id->get().group_at(group_handle.value())[0];
 
     stage->boss.set_sprite(res::sprite{
-      .atlas_handle = atlas_id.value(),
-      .atlas_index = index,
+      .handle = atlas_id.value(),
+      .index = index,
     });
 
     stage->boss.set_scale(scale);
@@ -88,12 +88,11 @@ void lua_env::_populate_globals(stage::state* stage) {
     cmplx proj_pos = cmplx{pos.get<float>("real"), pos.get<float>("imag")};
 
     auto atlas_id = res::atlas_from_name("effects");
-    auto group_handle = atlas_id->get().find_group("stars_small");
-    const auto index = atlas_id->get().group_at(group_handle.value())[0];
-    
+    // auto group_handle = atlas_id->get().find_group("stars_small");
+    // const auto index = atlas_id->get().group_at(group_handle.value())[0];
     stage->projectiles.emplace_back(res::sprite{
-      .atlas_handle = atlas_id.value(),
-      .atlas_index = index,
+        .handle = atlas_id.value(),
+        .sequence = atlas_id->get().find_sequence("stars_small.test"),
       }, 
       entity::move_linear(proj_dir*speed), proj_pos, stage->ticks());
   });

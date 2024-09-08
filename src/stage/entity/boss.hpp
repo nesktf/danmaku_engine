@@ -28,12 +28,13 @@ public:
     _ready = true;
     set_pos(init_pos);
     _move = first_movement;
+    _birth = global::state().elapsed_ticks;
   }
 
 public:
   void set_sprite(res::sprite spr) {
     _sprite = spr;
-    const auto& meta = spr.atlas_handle.get().at(spr.atlas_index);
+    const auto& meta = spr.handle.get().at(spr.index);
     _transform.set_scale(meta.aspect()*_scale);
   }
 
@@ -61,6 +62,7 @@ public:
 public:
   ntf::transform2d& transform() { return _transform; }
   res::sprite sprite() { return _sprite; }
+  uint birth() const { return _birth; }
 
   const renderer::uniform_tuple& uniforms() const { return _uniforms; }
 
@@ -75,6 +77,7 @@ private:
   movement _move;
   float _ang_speed {0.0f};
   float _scale{50.0f};
+  uint _birth{0};
 };
 
 } // namespace entity

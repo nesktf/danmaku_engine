@@ -56,8 +56,8 @@ using atlas = handle_wrapper<atlas_type, atlas_getter>;
 using texture = handle_wrapper<texture_type, texture_getter>;
 
 struct sprite {
-  atlas atlas_handle{0};
-  atlas_type::texture_handle atlas_index{0};
+  atlas handle{0};
+  atlas_type::texture_handle index{0};
   std::optional<atlas_type::sequence_handle> sequence{};
 };
 

@@ -156,7 +156,7 @@ public:
     const auto& shader = _base_shader.get();
     const auto sprite_sampler = 0;
 
-    const auto& atlas = sprite.atlas_handle.get();
+    const auto& atlas = sprite.handle.get();
     shader.use();
     if (uniforms) {
       uniforms.bind(shader);
@@ -166,8 +166,14 @@ public:
       shader.set_uniform(_proj_u, proj);
       shader.set_uniform(_view_u, view);
       shader.set_uniform(_model_u, transform.mat());
-      shader.set_uniform(_offset_u, atlas.at(sprite.atlas_index).offset);
       shader.set_uniform(_color_u, color4{1.f});
+      if (sprite.sequence) {
+        uint frame = global::state().elapsed_ticks+renderable.birth();
+        const auto& seq = atlas.sequence_at(sprite.sequence.value());
+        shader.set_uniform(_offset_u, atlas.at(seq[frame%seq.size()]).offset);
+      } else {
+        shader.set_uniform(_offset_u, atlas.at(sprite.index).offset);
+      }
     }
 
     shader.set_uniform(_sampler_u, (int)sprite_sampler);
@@ -177,7 +183,7 @@ public:
   }
 
   void draw_sprite(res::sprite sprite, const mat4& model, const mat4& proj, const mat4& view) const {
-    const auto& atlas = sprite.atlas_handle.get();
+    const auto& atlas = sprite.handle.get();
     const auto& shader = _base_shader.get();
     const auto sprite_sampler = 0;
 
@@ -185,7 +191,7 @@ public:
     shader.set_uniform(_proj_u, proj);
     shader.set_uniform(_view_u, view);
     shader.set_uniform(_model_u, model);
-    shader.set_uniform(_offset_u, atlas.at(sprite.atlas_index).offset);
+    shader.set_uniform(_offset_u, atlas.at(sprite.index).offset);
     shader.set_uniform(_color_u, color4{1.f});
 
     shader.set_uniform(_sampler_u, (int)sprite_sampler);
