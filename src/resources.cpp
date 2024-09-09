@@ -146,7 +146,7 @@ const font_type& font_getter::operator()(pool_handle id) { return _res.fonts[id]
 const atlas_type& atlas_getter::operator()(pool_handle id) { return _res.atlas[id]; }
 const texture_type& texture_getter::operator()(pool_handle id) { return _res.textures[id]; }
 
-std::optional<shader> shader_from_name(std::string_view name) {
+std::optional<shader> get_shader(std::string_view name) {
   auto shader = _res.shaders.find(name);
   if (shader) {
     return std::make_optional(static_cast<pool_handle>(shader.value()));
@@ -155,7 +155,7 @@ std::optional<shader> shader_from_name(std::string_view name) {
   return {};
 }
 
-std::optional<font> font_from_name(std::string_view name) {
+std::optional<font> get_font(std::string_view name) {
   auto font = _res.fonts.find(name);
   if (font) {
     return std::make_optional(static_cast<pool_handle>(font.value()));
@@ -164,7 +164,7 @@ std::optional<font> font_from_name(std::string_view name) {
   return {};
 }
 
-std::optional<atlas> atlas_from_name(std::string_view name) {
+std::optional<atlas> get_atlas(std::string_view name) {
   auto atlas = _res.atlas.find(name);
   if (atlas) {
     return std::make_optional(static_cast<pool_handle>(atlas.value()));
@@ -173,7 +173,30 @@ std::optional<atlas> atlas_from_name(std::string_view name) {
   return {};
 }
 
-std::optional<texture> texture_from_name(std::string_view name) {
+std::optional<atlas_type::sequence_handle> get_atlas_sequence(std::string_view atlas, std::string_view seq) {
+  auto atlas_handle = get_atlas(atlas);
+  if (!atlas_handle) {
+    ntf::log::warning("[res::get_atlas_sequence] Atlas not found: \"{}\"", atlas);
+    return {};
+  }
+  auto seq_handle = atlas_handle.value()->find_sequence(seq);
+  if (!seq_handle) {
+    ntf::log::warning("[res::get_atlas_sequence] Sequence \"{}\" not found in atlas \"{}\"", seq, atlas);
+    return {};
+  }
+  return seq_handle.value();
+}
+
+std::optional<atlas_type::sequence_handle> get_atlas_sequence(atlas atlas_handle, std::string_view seq) {
+  auto seq_handle = atlas_handle->find_sequence(seq);
+  if (!seq_handle) {
+    ntf::log::warning("[res::get_atlas_sequence] Sequence \"{}\" not found in atlas \"{}\"", seq, atlas_handle.id());
+    return {};
+  }
+  return seq_handle.value();
+}
+
+std::optional<texture> get_texture(std::string_view name) {
   auto texture = _res.textures.find(name);
   if (texture) {
     return std::make_optional(static_cast<pool_handle>(texture.value()));
@@ -201,5 +224,93 @@ void free(texture texture) {
   ntf::log::debug("[res::free] Texture slot {} issued for reuse", texture.id());
   _res.textures.unload(texture.id());
 }
+
+static inline sprite default_sprite() {
+  return sprite{.handle={0}, .index=0};
+}
+
+sprite sprite_from_index(atlas handle, atlas_type::texture_handle index) {
+  assert(handle->size() > index && "Invalid atlas index");
+  return sprite {.handle = handle, .index = index};
+}
+
+sprite sprite_from_index(std::string_view atlas, atlas_type::texture_handle index) {
+  auto atlas_handle = get_atlas(atlas);
+  if (!atlas_handle) {
+    ntf::log::warning("[res::sprite_from_index] Atlas not found \"{}\"", atlas);
+    return default_sprite();
+  }
+  if (atlas_handle.value()->size() <= index) {
+    ntf::log::warning("[res::sprite_from_index] Index \"{}\" out of bounds for atlas \"{}\"", atlas, index);
+    return default_sprite();
+  }
+  return sprite_from_index(atlas_handle.value(), index);
+}
+
+sprite sprite_from_group(atlas handle, atlas_type::group_handle group, atlas_type::texture_handle index) {
+  assert(handle->size() > index && "Invalid atlas index");
+  assert(handle->group_count() > group && "Invalid atlas group");
+  return sprite{.handle = handle, .index = handle->group_at(group)[index]};
+}
+
+sprite sprite_from_group(atlas handle, std::string_view group, atlas_type::texture_handle index) {
+  if (handle->size() <= index) {
+    ntf::log::warning("[res::sprite_from_group] Index \"{}\" out of bounds for atlas \"{}\"", handle.id(), index);
+    return default_sprite();
+  }
+  auto group_handle = handle->find_group(group);
+  if (!group_handle) {
+    ntf::log::warning("[res::sprite_from_group] Group \"{}\" not found in atlas \"{}\"", group, handle.id());
+    return default_sprite();
+  }
+  return sprite_from_group(handle, group_handle.value(), index);
+}
+
+sprite sprite_from_group(std::string_view atlas, std::string_view group, atlas_type::texture_handle index) {
+  auto atlas_handle = get_atlas(atlas);
+  if (!atlas_handle) {
+    ntf::log::warning("[res::sprite_from_group] Atlas not found \"{}\"", atlas);
+    return default_sprite();
+  }
+  if (atlas_handle.value()->size() <= index) {
+    ntf::log::warning("[res::sprite_from_group] Index \"{}\" out of bounds for atlas \"{}\"", atlas, index);
+    return default_sprite();
+  }
+  auto group_handle = atlas_handle.value()->find_group(group);
+  if (!group_handle) {
+    ntf::log::warning("[res::sprite_from_group] Group \"{}\" not found in atlas \"{}\"", group, atlas);
+    return default_sprite();
+  }
+  return sprite_from_group(atlas_handle.value(), group_handle.value(), index);
+}
+
+sprite sprite_from_sequence(atlas handle, atlas_type::sequence_handle seq) {
+  assert(handle->size() > seq && "Invalid atlas sequence");
+  return sprite{.handle = handle, .sequence = seq};
+}
+
+sprite sprite_from_sequence(atlas handle, std::string_view seq) {
+  auto seq_handle = handle->find_sequence(seq);
+  if (!seq_handle) {
+    ntf::log::warning("[res::sprite_from_sequence] Sequence \"{}\" not found in atlas \"{}\"", seq, handle.id());
+    return default_sprite();
+  }
+  return sprite_from_sequence(handle, seq_handle.value());
+}
+
+sprite sprite_from_sequence(std::string_view atlas, std::string_view seq) {
+  auto atlas_handle = get_atlas(atlas);
+  if (!atlas_handle) {
+    ntf::log::warning("[res::sprite_from_sequence] Atlas not found \"{}\"", atlas);
+    return default_sprite();
+  }
+  auto seq_handle = atlas_handle.value()->find_sequence(seq);
+  if (!seq_handle) {
+    ntf::log::warning("[res::sprite_from_sequence] Sequence \"{}\" not found in atlas \"{}\"", seq, atlas);
+    return default_sprite();
+  }
+  return sprite_from_sequence(atlas_handle.value(), seq_handle.value());
+}
+
 
 } // namespace res

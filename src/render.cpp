@@ -230,9 +230,9 @@ void render::init(ntf::glfw::window<renderer>& window) {
 
 void render::post_init(ntf::glfw::window<renderer>& win) {
   // Prepare shaders and things
-  auto fb_shader = res::shader_from_name("framebuffer");
-  auto sprite_shader = res::shader_from_name("sprite");
-  auto front_shader = res::shader_from_name("frontend");
+  auto fb_shader = res::get_shader("framebuffer");
+  auto sprite_shader = res::get_shader("sprite");
+  auto front_shader = res::get_shader("frontend");
 
   auto vp = win.size();
   _window = window_viewport{vp};
@@ -272,8 +272,8 @@ static void render_frontend([[maybe_unused]] double dt) {
   _ui.tick(dt);
   _ui.draw_background(back, _window);
 
-  const auto& font = res::font_from_name("arial")->get();
-  const auto& font_shader = res::shader_from_name("font")->get();
+  const auto& font = res::get_font("arial")->get();
+  const auto& font_shader = res::get_shader("font")->get();
 
   auto& menu = frontend::instance().entry();
   _renderer.draw_sprite(menu.background, menu.back_transform.mat(), _stage.proj(), _stage.view());
