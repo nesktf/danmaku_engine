@@ -5,10 +5,11 @@ namespace stage {
 
 state::state(std::string_view stage_script) : _lua(this, stage_script) {
   player.set_pos((vec2)VIEWPORT*0.5f);
-  player.set_scale(40.0f);
+  player.set_scale(60.0f);
+  auto atlas = res::atlas_from_name("chara_marisa").value();
   player.set_sprite(res::sprite{
-    .handle = res::atlas_from_name("effects").value(),
-    .index = 0,
+    .handle = atlas,
+    .sequence = atlas->find_sequence("marisa.idle"),
   });
 }
 

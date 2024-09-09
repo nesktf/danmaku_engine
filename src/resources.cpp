@@ -56,7 +56,9 @@ void init(std::function<void()> callback) {
   _res.atlas.emplace("default", atlas_type{default_texture()});
   request_atlas("enemies", "res/spritesheet/enemies.json");
   request_atlas("effects", "res/spritesheet/effects.json");
-  request_atlas("chara", "res/spritesheet/chara.json");
+  request_atlas("chara_reimu", "res/spritesheet/chara_reimu.json");
+  request_atlas("chara_marisa", "res/spritesheet/chara_marisa.json");
+  request_atlas("chara_cirno", "res/spritesheet/chara_cirno.json");
 
   // fonts
   request_font("arial", "res/fonts/arial.ttf");

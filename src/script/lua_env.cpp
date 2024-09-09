@@ -49,7 +49,7 @@ void lua_env::_populate_globals(stage::state* stage) {
   // Boss functions
   _lua.set_function("__SPAWN_BOSS", [stage](float scale, float ang_speed, sol::table p0, sol::table p1) {
     auto atlas_id = res::atlas_from_name("effects");
-    auto group_handle = atlas_id->get().find_group("stars_small");
+    auto group_handle = atlas_id->get().find_group("ball_solid");
     const auto index = atlas_id->get().group_at(group_handle.value())[0];
 
     stage->boss.set_sprite(res::sprite{
@@ -87,12 +87,14 @@ void lua_env::_populate_globals(stage::state* stage) {
     cmplx proj_dir = cmplx{dir.get<float>("real"), dir.get<float>("imag")};
     cmplx proj_pos = cmplx{pos.get<float>("real"), pos.get<float>("imag")};
 
-    auto atlas_id = res::atlas_from_name("effects");
-    // auto group_handle = atlas_id->get().find_group("stars_small");
-    // const auto index = atlas_id->get().group_at(group_handle.value())[0];
+    auto atlas = res::atlas_from_name("effects").value();
+    // auto fire = atlas->find_group("note").value();
+    // auto star = atlas->find_group("star_med").value();
     stage->projectiles.emplace_back(res::sprite{
-        .handle = atlas_id.value(),
-        .sequence = atlas_id->get().find_sequence("stars_small.test"),
+        .handle = atlas,
+        // .index = atlas->group_at(fire)[0]
+        // .index = atlas->group_at(star)[1]
+        .sequence = atlas->find_sequence("note.red"),
       }, 
       entity::move_linear(proj_dir*speed), proj_pos, stage->ticks());
   });
