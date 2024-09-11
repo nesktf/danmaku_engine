@@ -25,6 +25,7 @@ using font_data = ntf::font_data<font_type>;
 using atlas_type = ntf::texture_atlas<texture_type>;
 using atlas_data = atlas_type::data_type;
 
+
 template<typename Resource, typename Getter>
 class handle_wrapper {
 public:
@@ -54,6 +55,8 @@ using shader = handle_wrapper<shader_type, shader_getter>;
 using font = handle_wrapper<font_type, font_getter>;
 using atlas = handle_wrapper<atlas_type, atlas_getter>;
 using texture = handle_wrapper<texture_type, texture_getter>;
+
+using sprite_animator = ntf::texture_animator<texture_type, atlas>;
 
 struct sprite {
   atlas handle{0};

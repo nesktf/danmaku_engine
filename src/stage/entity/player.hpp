@@ -11,15 +11,27 @@ namespace entity {
 
 class player {
 public:
+  using anim_data = std::array<res::atlas_type::sequence_handle, 3>;
+
+  enum anim_state : uint8_t {
+    IDLE = 0,
+    LEFT,
+    RIGHT,
+  };
+
+public:
   player() = default;
 
 public:
   void tick();
 
 public:
-  void set_sprite(res::sprite sp) {
-    _sprite = sp;
-    const auto& meta = sp.handle.get().at(sp.index);
+  void set_sprite(res::atlas atlas, anim_data anim) {
+    _anim = anim;
+    _animator = res::sprite_animator{atlas, anim[0]};
+
+    const auto& seq = atlas->sequence_at(anim[0]);
+    const auto& meta = atlas->at(seq[0]);
     transf.set_scale(meta.aspect()*scale);
   }
 
@@ -32,14 +44,19 @@ public:
     scale = sc;
   }
 
+  res::sprite sprite() const {
+    return res::sprite {
+      .handle = _animator.atlas(),
+      .index = _animator.frame(),
+    };
+  }
+
   ntf::transform2d& transform() { return transf; }
-  res::sprite sprite() const { return _sprite; }
   uint birth() const { return _birth; }
 
   const renderer::uniform_tuple& uniforms() const { return _uniforms; }
 
 public:
-  res::sprite _sprite;
   ntf::transform2d transf;
   renderer::uniform_tuple _uniforms;
 
@@ -47,6 +64,10 @@ public:
   float speed_factor{450.0f};
   bool shifting{false};
   uint _birth{0};
+
+  res::sprite_animator _animator;
+  anim_data _anim;
+  anim_state _state{IDLE};
 };
 
 } // namespace entity
