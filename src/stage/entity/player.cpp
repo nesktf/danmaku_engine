@@ -41,34 +41,40 @@ void player::tick() {
     case IDLE: {
       if (next_state == LEFT) {
         _state = LEFT;
-        _animator.hard_switch(_anim[LEFT], 0);
+        _animator.hard_switch(_anim[IDLE_TO_LEFT], 1);
+        _animator.enqueue_sequence(_anim[LEFT], 0);
       } else if (next_state == RIGHT) {
         _state = RIGHT;
-        _animator.hard_switch(_anim[RIGHT], 0);
+        _animator.hard_switch(_anim[IDLE_TO_RIGHT], 1);
+        _animator.enqueue_sequence(_anim[RIGHT], 0);
       }
       break;
     }
     case RIGHT: {
       if (next_state == IDLE) {
-        _state = IDLE;
-        _animator.hard_switch(_anim[IDLE], 0);
+        _animator.hard_switch(_anim[RIGHT_TO_IDLE], 1);
+        _animator.enqueue_sequence(_anim[IDLE], 0);
       } else if (next_state == LEFT) {
-        _state = LEFT;
-        _animator.hard_switch(_anim[LEFT], 0);
+        _animator.hard_switch(_anim[RIGHT_TO_IDLE], 1);
+        _animator.enqueue_sequence(_anim[IDLE_TO_LEFT], 1);
+        _animator.enqueue_sequence(_anim[LEFT], 0);
       }
       break;
     }
     case LEFT: {
       if (next_state == IDLE) {
-        _state = IDLE;
-        _animator.hard_switch(_anim[IDLE], 0);
+        _animator.hard_switch(_anim[LEFT_TO_IDLE], 1);
+        _animator.enqueue_sequence(_anim[IDLE], 0);
       } else if (next_state == RIGHT) {
-        _state = RIGHT;
-        _animator.hard_switch(_anim[RIGHT], 0);
+        _animator.hard_switch(_anim[LEFT_TO_IDLE], 1);
+        _animator.enqueue_sequence(_anim[IDLE_TO_RIGHT], 1);
+        _animator.enqueue_sequence(_anim[RIGHT], 0);
       }
       break;
     }
+    default: break;
   }
+  _state = next_state;
   _animator.tick();
 }
 

@@ -11,13 +11,19 @@ namespace entity {
 
 class player {
 public:
-  using anim_data = std::array<res::atlas_type::sequence_handle, 3>;
 
   enum anim_state : uint8_t {
     IDLE = 0,
     LEFT,
+    LEFT_TO_IDLE,
+    IDLE_TO_LEFT,
     RIGHT,
+    RIGHT_TO_IDLE,
+    IDLE_TO_RIGHT,
+    ANIM_COUNT,
   };
+
+  using anim_data = std::array<res::atlas_type::sequence_handle, ANIM_COUNT>;
 
 public:
   player() = default;

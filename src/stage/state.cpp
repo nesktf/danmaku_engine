@@ -5,12 +5,18 @@ namespace stage {
 
 state::state(std::string_view stage_script) : _lua(this, stage_script) {
   player.set_pos((vec2)VIEWPORT*0.5f);
-  player.set_scale(60.0f);
+  player.set_scale(70.0f);
   auto atlas = res::get_atlas("chara_cirno").value();
   player.set_sprite(atlas, {
     atlas->find_sequence("cirno.idle").value(),
+
     atlas->find_sequence("cirno.left").value(),
-    atlas->find_sequence("cirno.right").value()
+    atlas->find_sequence("cirno.left_to_idle").value(),
+    atlas->find_sequence("cirno.idle_to_left").value(),
+
+    atlas->find_sequence("cirno.right").value(),
+    atlas->find_sequence("cirno.right_to_idle").value(),
+    atlas->find_sequence("cirno.idle_to_right").value(),
   });
 }
 
