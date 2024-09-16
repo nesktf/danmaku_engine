@@ -58,11 +58,7 @@ using texture = handle_wrapper<texture_type, texture_getter>;
 
 using sprite_animator = ntf::texture_animator<texture_type, atlas>;
 
-struct sprite {
-  atlas handle{0};
-  atlas_type::texture_handle index{0};
-  std::optional<atlas_type::sequence_handle> sequence{};
-};
+using sprite = std::pair<atlas, atlas_type::texture_handle>;
 
 void init(std::function<void()> callback);
 void destroy();
@@ -82,16 +78,16 @@ std::optional<atlas_type::sequence_handle> get_atlas_sequence(std::string_view a
 std::optional<atlas_type::sequence_handle> get_atlas_sequence(atlas handle, std::string_view seq);
 std::optional<texture> get_texture(std::string_view name);
 
-sprite sprite_from_index(atlas handle, atlas_type::texture_handle index);
-sprite sprite_from_index(std::string_view atlas, atlas_type::texture_handle index);
-
-sprite sprite_from_group(atlas handle, atlas_type::group_handle group, atlas_type::texture_handle index);
-sprite sprite_from_group(atlas handle, std::string_view group, atlas_type::texture_handle index);
-sprite sprite_from_group(std::string_view atlas, std::string_view group, atlas_type::texture_handle index);
-
-sprite sprite_from_sequence(atlas handle, atlas_type::sequence_handle seq);
-sprite sprite_from_sequence(atlas handle, std::string_view seq);
-sprite sprite_from_sequence(std::string_view atlas, std::string_view seq);
+// sprite sprite_from_index(atlas handle, atlas_type::texture_handle index);
+// sprite sprite_from_index(std::string_view atlas, atlas_type::texture_handle index);
+//
+// sprite sprite_from_group(atlas handle, atlas_type::group_handle group, atlas_type::texture_handle index);
+// sprite sprite_from_group(atlas handle, std::string_view group, atlas_type::texture_handle index);
+// sprite sprite_from_group(std::string_view atlas, std::string_view group, atlas_type::texture_handle index);
+//
+// sprite sprite_from_sequence(atlas handle, atlas_type::sequence_handle seq);
+// sprite sprite_from_sequence(atlas handle, std::string_view seq);
+// sprite sprite_from_sequence(std::string_view atlas, std::string_view seq);
 
 void free(shader shader);
 void free(font font);

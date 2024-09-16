@@ -24,6 +24,36 @@ global_state& state() { return _state; }
 
 } // namespace global
 
+namespace {
+
+using window_type = glfw::window<renderer>;
+using imgui_type = imgui::imgui_lib<imgui::glfw_gl3_impl>;
+
+void render_frame(window_type& window, imgui_type& imgui, double dt, double alpha) {
+  imgui.start_frame();
+  render::draw(window, dt, alpha);
+  imgui.end_frame();
+}
+
+void logic_frame() {
+  global::_state.elapsed_ticks++;
+  res::do_requests();
+
+  switch(global::_state.current_state) {
+    case global::states::gameplay: {
+      assert(global::_state.stage && "Stage not initialized");
+      global::_state.stage->tick();
+      break;
+    }
+    case global::states::frontend: {
+      frontend::tick();
+      break;
+    }
+    default: break;
+  }
+}
+
+} // namespace
 
 int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
   ntf::log::set_level(ntf::loglevel::verbose);
@@ -33,7 +63,6 @@ int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
   
   glfw::window<renderer> window{1280, 720, "test"};
   auto imgui = imgui::init(window, imgui::glfw_gl3_impl{});
-
 
   // Common init
   render::init(window);
@@ -46,32 +75,10 @@ int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
     global::_state.current_state = global::states::frontend;
   });
 
-
-  auto render_fun = [&](double dt, double alpha) {
-    imgui.start_frame();
-    render::draw(window, dt, alpha);
-    imgui.end_frame();
-  };
-
-  auto tick_fun = [&]() {
-    global::_state.elapsed_ticks++;
-    res::do_requests();
-
-    switch(global::_state.current_state) {
-      case global::states::gameplay: {
-        assert(global::_state.stage && "Stage not initialized");
-        global::_state.stage->tick();
-        break;
-      }
-      case global::states::frontend: {
-        frontend::tick();
-        break;
-      }
-      default: break;
-    }
-  };
-
-  ntf::shogle_main_loop(window, UPS, render_fun, tick_fun);
+  ntf::shogle_main_loop(window, UPS,
+    [&](double dt, double alpha) { render_frame(window, imgui, dt, alpha); },
+    [&]() { logic_frame(); }
+  );
 
   res::destroy();
   render::destroy();

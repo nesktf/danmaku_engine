@@ -8,6 +8,8 @@
 
 #include <shogle/engine.hpp>
 
+using real = float;
+
 using ntf::vec2;
 using ntf::vec3;
 using ntf::vec4;

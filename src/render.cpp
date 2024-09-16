@@ -147,43 +147,28 @@ public:
   }
 
 public:
-  template<typename Obj>
+  template<stage::entity_type Obj>
   void draw_thing(Obj&& renderable, const mat4& proj, const mat4& view) const {
-    auto& transform = renderable.transform();
-    const auto sprite = renderable.sprite();
-    const auto& uniforms = renderable.uniforms();
+    const auto [atlas, index] = renderable.sprite();
 
     const auto& shader = _base_shader.get();
     const auto sprite_sampler = 0;
-
-    const auto& atlas = sprite.handle.get();
     shader.use();
-    if (uniforms) {
-      uniforms.bind(shader);
-      // TODO: Find another way to bind samplers?
-      renderer::draw_quad();
-    } else {
-      shader.set_uniform(_proj_u, proj);
-      shader.set_uniform(_view_u, view);
-      shader.set_uniform(_model_u, transform.mat());
-      shader.set_uniform(_color_u, color4{1.f});
-      if (sprite.sequence) {
-        uint frame = global::state().elapsed_ticks+renderable.birth();
-        const auto& seq = atlas.sequence_at(sprite.sequence.value());
-        shader.set_uniform(_offset_u, atlas.at(seq[frame%seq.size()]).offset);
-      } else {
-        shader.set_uniform(_offset_u, atlas.at(sprite.index).offset);
-      }
-    }
+
+    shader.set_uniform(_proj_u, proj);
+    shader.set_uniform(_view_u, view);
+    shader.set_uniform(_model_u, renderable.mat());
+    shader.set_uniform(_color_u, color4{1.f});
+    shader.set_uniform(_offset_u, atlas->at(index).offset);
 
     shader.set_uniform(_sampler_u, (int)sprite_sampler);
-    atlas.texture().bind_sampler((size_t)sprite_sampler);
+    atlas->texture().bind_sampler((size_t)sprite_sampler);
 
     renderer::draw_quad();
   }
 
-  void draw_sprite(res::sprite sprite, const mat4& model, const mat4& proj, const mat4& view) const {
-    const auto& atlas = sprite.handle.get();
+  void draw_sprite(res::sprite spr, const mat4& model, const mat4& proj, const mat4& view) const {
+    const auto [atlas, index] = spr;
     const auto& shader = _base_shader.get();
     const auto sprite_sampler = 0;
 
@@ -191,11 +176,11 @@ public:
     shader.set_uniform(_proj_u, proj);
     shader.set_uniform(_view_u, view);
     shader.set_uniform(_model_u, model);
-    shader.set_uniform(_offset_u, atlas.at(sprite.index).offset);
+    shader.set_uniform(_offset_u, atlas->at(index).offset);
     shader.set_uniform(_color_u, color4{1.f});
 
     shader.set_uniform(_sampler_u, (int)sprite_sampler);
-    atlas.texture().bind_sampler((size_t)sprite_sampler);
+    atlas->texture().bind_sampler((size_t)sprite_sampler);
 
     renderer::draw_quad();
   }
@@ -248,7 +233,7 @@ static void render_gameplay(double dt) {
     auto& player = stage->player;
     auto& boss = stage->boss;
 
-    if (boss.ready()) {
+    if (!boss.hide) {
       _renderer.draw_thing(boss, _stage.proj(), _stage.view());
     }
 

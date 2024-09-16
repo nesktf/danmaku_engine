@@ -1,50 +1,55 @@
-#include "stage/entity/player.hpp"
+#include "stage/player.hpp"
+
 #include "input.hpp"
-#include "math.hpp"
 
-namespace entity {
+namespace stage {
 
-void player::tick() {
-  cmplx vel{0.0f};
-  auto speed = speed_factor;
-  if (input::poll_key(input::keycode::key_l)) {
-    speed *= 0.66f;
-  }
+void player_entity::movement_type::tick(ntf::transform2d& transform) {
+  cmplx move_dir{0.f};
 
   if (input::poll_key(input::keycode::key_a)) {
-    vel.real(-1.0f);
+    move_dir.real(-1.f);
   } else if (input::poll_key(input::keycode::key_d)) {
-    vel.real(1.0f);
+    move_dir.real(1.f);
   }
 
   if (input::poll_key(input::keycode::key_w)) {
-    vel.imag(-1.0f);
+    move_dir.imag(-1.f);
   } else if (input::poll_key(input::keycode::key_s)) {
-    vel.imag(1.0f);
+    move_dir.imag(1.f);
   }
 
-  if (math::norm2(vel) > 0) { 
-    vel = math::normalize(vel);
+  real norm2 = math::norm2(move_dir);
+  if (norm2 > 0) {
+    move_dir /= glm::sqrt(norm2);
   }
 
-  anim_state next_state = IDLE;
+  if (input::poll_key(input::keycode::key_l)) {
+    _vel = move_dir*slow_speed;
+  } else {
+    _vel = move_dir*base_speed;
+  }
+
+  const vec2 clamp_min{0.f};
+  const vec2 clamp_max{VIEWPORT};
+  transform.set_pos(glm::clamp(math::conv(transform.cpos() + _vel), clamp_min, clamp_max));
+}
+
+void player_entity::animator_type::tick(const movement_type& movement) {
+  const auto vel = movement.vel();
+  animation_state next_state = IDLE;
   if (vel.real() > 0) {
     next_state = RIGHT;
   } else if (vel.real() < 0) {
     next_state = LEFT;
   }
 
-  const auto pos = transf.cpos() + vel*speed*DT;
-  transf.set_pos(glm::clamp(math::conv(pos), vec2{0.0f}, (vec2)VIEWPORT));
-
   switch (_state) {
     case IDLE: {
       if (next_state == LEFT) {
-        _state = LEFT;
         _animator.hard_switch(_anim[IDLE_TO_LEFT], 1);
         _animator.enqueue_sequence(_anim[LEFT], 0);
       } else if (next_state == RIGHT) {
-        _state = RIGHT;
         _animator.hard_switch(_anim[IDLE_TO_RIGHT], 1);
         _animator.enqueue_sequence(_anim[RIGHT], 0);
       }
@@ -78,4 +83,18 @@ void player::tick() {
   _animator.tick();
 }
 
-} // namespace entity
+void player_entity::animator_type::set_data(res::atlas atlas, animation_data data) {
+  _anim = data;
+  _animator = res::sprite_animator{atlas, _anim[0]};
+}
+
+res::sprite player_entity::animator_type::sprite() const {
+  return res::sprite{_animator.atlas(), _animator.frame()};
+}
+
+void player_entity::tick() {
+  movement.tick(transform);
+  animator.tick(movement);
+}
+
+} // namespace stage

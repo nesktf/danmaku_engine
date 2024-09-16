@@ -1,6 +1,0 @@
-
-namespace entity {
-
-
-
-} // namespace ntf
