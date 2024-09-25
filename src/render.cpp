@@ -1,267 +1,116 @@
-#include "stage/state.hpp"
-
 #include "global.hpp"
 #include "render.hpp"
 #include "ui/frontend.hpp"
 
 #include <shogle/engine.hpp>
 
-#include <shogle/render/gl/framebuffer.hpp>
-
 #include <shogle/scene/camera.hpp>
 
 namespace {
 
-class window_viewport {
+class sprite_renderer {
 public:
-  window_viewport() = default;
-  window_viewport(ivec2 win) {
-    update(win);
-  }
+  void init(res::shader shader);
 
-public:
-  void update(ivec2 win_size) {
-    proj = glm::ortho(0.f, (float)win_size.x, (float)win_size.y, 0.f, -10.f, 1.f);
-    size = win_size;
-  }
-
-public:
-  mat4 proj{};
-  ivec2 size{};
-};
-
-class stage_render {
-public:
-  stage_render() = default;
-  stage_render(ivec2 vp_size, ivec2 center, vec2 pos, res::shader shader) : _shader(shader) {
-    update_viewport(vp_size, center);
-    update_pos(pos);
-  }
-  
-public:
-  void update_viewport(ivec2 vp_size, ivec2 center) {
-    _cam_center = (vec2)center;
-    _viewport = renderer::framebuffer{vp_size};
-    _proj = glm::ortho(0.f, (float)vp_size.x, (float)vp_size.y, 0.f, -10.f, 1.f);
-    _view = ntf::view2d((vec2)_viewport.size()*.5f, _cam_center, vec2{1.f}, 0.f);
-    _transform.set_scale((vec2)vp_size);
-  }
-
-  void update_pos(vec2 pos) {
-    _transform.set_pos(pos);
-  }
-
-  template<typename Fun>
-  void bind(const window_viewport& window, Fun&& f) {
-    _viewport.bind((size_t)window.size.x, (size_t)window.size.y, std::forward<Fun>(f));
-  }
-
-  void draw(const window_viewport& window) {
-    assert(_viewport.valid());
-    const auto& shader = _shader.get();
-    const auto sampler = 0;
-
-    shader.use();
-    shader.set_uniform("proj", window.proj);
-    shader.set_uniform("view", mat4{1.f});
-    shader.set_uniform("model", _transform.mat());
-
-    shader.set_uniform("fb_sampler", (int)sampler);
-    _viewport.tex().bind_sampler((size_t)sampler);
-
-    renderer::draw_quad();
-  }
-
-  void destroy() {
-    _viewport.unload();
-  }
-
-public:
-  const mat4& proj() const { return _proj; }
-  const mat4& view() const { return _view; }
+  void draw(res::sprite sprite, const color4& color,
+            const mat4& model, const mat4& proj, const mat4& view) const;
 
 private:
-  mat4 _proj;
-  mat4 _view;
-  renderer::framebuffer _viewport;
-  ntf::transform2d _transform;
-  vec2 _cam_center;
   res::shader _shader;
+  render::uniform _proj_u, _view_u, _model_u;
+  render::uniform _offset_u, _color_u, _sampler_u;
 };
 
-class ui_render {
-public:
-  ui_render() = default;
-  ui_render(const window_viewport& win, res::shader back_shader) : _back_shader(back_shader) {
-    const auto& sh = _back_shader.get();
+void sprite_renderer::init(res::shader shader) {
+  _shader = shader;
 
-    sh.uniform_location(_proj_u, "proj");
-    sh.uniform_location(_model_u, "model");
+  _shader->uniform_location(_proj_u, "proj");
+  _shader->uniform_location(_view_u, "view");
+  _shader->uniform_location(_model_u, "model");
+  _shader->uniform_location(_offset_u, "offset");
+  _shader->uniform_location(_color_u, "sprite_color");
+  _shader->uniform_location(_sampler_u, "sprite_sampler");
+}
 
-    sh.uniform_location(_time_u, "time");
-    sh.uniform_location(_sampler_u, "tex");
+void sprite_renderer::draw(res::sprite sprite, const color4& color,
+                         const mat4& model, const mat4& proj, const mat4& view) const {
+  const auto [atlas, index] = sprite;
+  const auto sprite_sampler = 0;
 
-    _ui_root.set_pos((vec2)win.size*.5f).set_scale(win.size);
-  }
+  _shader->use();
+  _shader->set_uniform(_proj_u, proj);
+  _shader->set_uniform(_view_u, view);
+  _shader->set_uniform(_model_u, model);
+  _shader->set_uniform(_offset_u, atlas->at(index).offset);
+  _shader->set_uniform(_color_u, color);
 
-public:
-  void tick(double dt) { // TODO: call this thing in the update loop, somehow
-    _back_time += dt;
-  }
+  _shader->set_uniform(_sampler_u, (int)sprite_sampler);
+  atlas->texture().bind_sampler((size_t)sprite_sampler);
 
-  void draw_background(const renderer::texture2d& tex, const window_viewport& win) {
-    const auto& shader = _back_shader.get();
-    const auto sampler = 0;
+  renderer::draw_quad();
+}
 
-    shader.use();
-    shader.set_uniform(_proj_u, win.proj);
-    shader.set_uniform(_model_u, _ui_root.mat());
-    shader.set_uniform(_time_u, _back_time);
+struct {
+  render::ui_renderer ui;
+  // render::stage_viewport stage;
+  sprite_renderer sprite;
 
-    shader.set_uniform(_sampler_u, (int)sampler);
-    tex.bind_sampler((size_t)sampler);
+  mat4 win_proj;
+  ivec2 win_size;
 
-    renderer::draw_quad();
-  }
-
-private:
-  res::shader _back_shader;
-  float _back_time{0};
-  ntf::transform2d _ui_root;
-  renderer::shader_uniform _proj_u, _model_u;
-  renderer::shader_uniform _time_u, _sampler_u;
-};
-
-class sprite_render {
-public:
-  sprite_render() = default;
-  sprite_render(res::shader base_shader) : _base_shader(base_shader) {
-    const auto& sh = _base_shader.get();
-
-    sh.uniform_location(_proj_u, "proj");
-    sh.uniform_location(_view_u, "view");
-    sh.uniform_location(_model_u, "model");
-    sh.uniform_location(_offset_u, "offset");
-    sh.uniform_location(_color_u, "sprite_color");
-    sh.uniform_location(_sampler_u, "sprite_sampler");
-  }
-
-public:
-  template<stage::entity_type Obj>
-  void draw_thing(Obj&& renderable, const mat4& proj, const mat4& view) const {
-    const auto [atlas, index] = renderable.sprite();
-
-    const auto& shader = _base_shader.get();
-    const auto sprite_sampler = 0;
-    shader.use();
-
-    shader.set_uniform(_proj_u, proj);
-    shader.set_uniform(_view_u, view);
-    shader.set_uniform(_model_u, renderable.mat());
-    shader.set_uniform(_color_u, color4{1.f});
-    shader.set_uniform(_offset_u, atlas->at(index).offset);
-
-    shader.set_uniform(_sampler_u, (int)sprite_sampler);
-    atlas->texture().bind_sampler((size_t)sprite_sampler);
-
-    renderer::draw_quad();
-  }
-
-  void draw_sprite(res::sprite spr, const mat4& model, const mat4& proj, const mat4& view) const {
-    const auto [atlas, index] = spr;
-    const auto& shader = _base_shader.get();
-    const auto sprite_sampler = 0;
-
-    shader.use();
-    shader.set_uniform(_proj_u, proj);
-    shader.set_uniform(_view_u, view);
-    shader.set_uniform(_model_u, model);
-    shader.set_uniform(_offset_u, atlas->at(index).offset);
-    shader.set_uniform(_color_u, color4{1.f});
-
-    shader.set_uniform(_sampler_u, (int)sprite_sampler);
-    atlas->texture().bind_sampler((size_t)sprite_sampler);
-
-    renderer::draw_quad();
-  }
-
-private:
-  res::shader _base_shader;
-  renderer::shader_uniform _proj_u, _view_u, _model_u;
-  renderer::shader_uniform _offset_u, _color_u, _sampler_u; // TODO: get rid of the color unif
-};
+  render::viewport_event vp_event;
+} r;
 
 } // namespace
 
-static window_viewport _window;
-static stage_render _stage;
-static ui_render _ui;
-static sprite_render _renderer;
 
-void render::destroy() {
-  _stage.destroy();
+namespace render {
+
+void destroy() {
+  r.vp_event.clear();
 }
 
-void render::init(ntf::glfw::window<renderer>& window) {
+void init(ntf::glfw::window<renderer>& window) {
   // Load OpenGL and things
   renderer::set_blending(true);
 
   window.set_viewport_event([](size_t w, size_t h) {
     renderer::set_viewport(w, h);
-    _window.update(ivec2{w, h});
-    _stage.update_pos(vec2(w,h)*.5f);
+    r.win_size = ivec2{w, h};
+    r.win_proj = glm::ortho(0.f, (float)w, (float)h, 0.f, -10.f, 1.f);
+
+    r.vp_event.fire(w, h);
   });
 }
 
-void render::post_init(ntf::glfw::window<renderer>& win) {
+void post_init(ntf::glfw::window<renderer>& win) {
   // Prepare shaders and things
-  auto fb_shader = res::get_shader("framebuffer");
   auto sprite_shader = res::get_shader("sprite");
   auto front_shader = res::get_shader("frontend");
 
   auto vp = win.size();
-  _window = window_viewport{vp};
-  _stage = stage_render{VIEWPORT, VIEWPORT/2, (vec2)vp*0.5f, fb_shader.value()};
-  _renderer = sprite_render{sprite_shader.value()};
-  _ui = ui_render{_window, front_shader.value()};
+
+  r.win_size = vp;
+  r.win_proj = glm::ortho(0.f, (float)vp.x, (float)vp.y, 0.f, -10.f, 1.f);
+  r.ui.init(vp, front_shader.value());
+  r.sprite.init(sprite_shader.value());
 }
 
-static void render_gameplay(double dt) {
-  _stage.bind(_window, []() {
-    renderer::clear_viewport(color3{0.3f});
-    auto& stage = global::state().stage;
-    auto& player = stage->player;
-    auto& boss = stage->boss;
-
-    if (!boss.hide) {
-      _renderer.draw_thing(boss, _stage.proj(), _stage.view());
-    }
-
-    _renderer.draw_thing(player, _stage.proj(), _stage.view());
-
-    for (auto& bullet : stage->projectiles) {
-      _renderer.draw_thing(bullet, _stage.proj(), _stage.view());
-    }
-  });
-
+void draw_background(double dt) {
   const auto& back = res::texture{0}.get();
-  _ui.tick(dt);
-  _ui.draw_background(back, _window);
-
-  _stage.draw(_window);
+  r.ui.tick(dt);
+  r.ui.draw(back, r.win_proj);
 }
 
-static void render_frontend([[maybe_unused]] double dt) {
+void draw_frontend(double dt) {
   // TODO: Move this thing to a widget class
-  const auto& back = res::texture{0}.get();
-  _ui.tick(dt);
-  _ui.draw_background(back, _window);
+  render::draw_background(dt);
 
   const auto& font = res::get_font("arial")->get();
   const auto& font_shader = res::get_shader("font")->get();
 
   auto& menu = frontend::instance().entry();
-  _renderer.draw_sprite(menu.background, menu.back_transform.mat(), _stage.proj(), _stage.view());
+  render::draw_sprite(menu.background, menu.back_transform.mat(), r.win_proj, mat4{1.f});
 
   for (size_t i = 0; i < menu.entries.size(); ++i) {
     const auto focused_index = menu.focused;
@@ -277,7 +126,7 @@ static void render_frontend([[maybe_unused]] double dt) {
     const auto shader_sampler = 0;
 
     font_shader.use();
-    font_shader.set_uniform("proj", _window.proj);
+    font_shader.set_uniform("proj", r.win_proj);
     font_shader.set_uniform("model", font_transform.mat());
     font_shader.set_uniform("text_color", col);
     font_shader.set_uniform("tex", (int)shader_sampler);
@@ -285,20 +134,103 @@ static void render_frontend([[maybe_unused]] double dt) {
   }
 }
 
-
-void render::draw(window&, [[maybe_unused]] double dt, [[maybe_unused]] double alpha) {
-  renderer::clear_viewport(color3{.2f});
-
-  switch (global::state().current_state) {
-    case global::states::frontend: {
-      render_frontend(dt);
-      break;
-    }
-    case global::states::gameplay: {
-      render_gameplay(dt);
-      break;
-    }
-    default: break;
-  }
+void clear_viewport() {
+  renderer::clear_viewport(color3{.3f});
 }
+
+void draw_sprite(res::sprite sprite, const mat4& mod, const mat4& proj, const mat4& view) {
+  r.sprite.draw(sprite, color4{1.f}, mod, proj, view);
+}
+
+ivec2 win_size() {
+  return r.win_size;
+}
+
+const mat4& win_proj() {
+  return r.win_proj;
+}
+
+viewport_event::subscription vp_subscribe(viewport_event::callback callback) {
+  return r.vp_event.subscribe(callback);
+}
+
+void vp_unsuscribe(viewport_event::subscription sub) {
+  r.vp_event.unsubscribe(sub);
+}
+
+
+void ui_renderer::init(ivec2 win_size, res::shader shader) {
+  _shader = shader;
+
+  _shader->uniform_location(_proj_u, "proj");
+  _shader->uniform_location(_model_u, "model");
+  _shader->uniform_location(_time_u, "time");
+  _shader->uniform_location(_sampler_u, "tex");
+
+  _ui_root.set_pos((vec2)win_size*.5f).set_scale(win_size);
+}
+
+void ui_renderer::tick(double dt) {
+  _back_time += dt;
+}
+
+void ui_renderer::draw(const renderer::texture2d& tex, const mat4& win_proj) {
+  const auto sampler = 0;
+
+  _shader->use();
+  _shader->set_uniform(_proj_u, win_proj);
+  _shader->set_uniform(_model_u, _ui_root.mat());
+  _shader->set_uniform(_time_u, _back_time);
+
+  _shader->set_uniform(_sampler_u, (int)sampler);
+  tex.bind_sampler((size_t)sampler);
+
+  renderer::draw_quad();
+}
+
+void stage_viewport::init(ivec2 vp_size, ivec2 center, vec2 pos, res::shader shader) {
+  _shader = shader;
+  shader->uniform_location(_proj_u, "proj");
+  shader->uniform_location(_view_u, "view");
+  shader->uniform_location(_model_u, "model");
+  shader->uniform_location(_sampler_u, "fb_sampler");
+
+  update_viewport(vp_size, center);
+  update_pos(pos);
+}
+
+void stage_viewport::destroy() {
+  _viewport = renderer::framebuffer{};
+}
+
+void stage_viewport::draw(const mat4& win_proj) {
+  assert(_viewport.valid());
+  const auto sampler = 0;
+
+  _shader->use();
+
+  _shader->set_uniform(_proj_u, win_proj);
+  _shader->set_uniform(_view_u, mat4{1.f});
+  _shader->set_uniform(_model_u, _transform.mat());
+
+  _shader->set_uniform(_sampler_u, (int)sampler);
+  _viewport.tex().bind_sampler((size_t)sampler);
+
+  renderer::draw_quad();
+}
+
+
+void stage_viewport::update_viewport(ivec2 vp_size, ivec2 center) {
+  _cam_center = center;
+  _viewport = renderer::framebuffer{vp_size};
+  _proj = glm::ortho(0.f, (float)vp_size.x, (float)vp_size.y, 0.f, -10.f, 1.f);
+  _view = ntf::view2d((vec2)_viewport.size()*.5f, _cam_center, vec2{1.f}, 0.f);
+  _transform.set_scale((vec2)vp_size);
+}
+
+void stage_viewport::update_pos(vec2 pos) {
+  _transform.set_pos(pos);
+}
+
+} // namespace render
 

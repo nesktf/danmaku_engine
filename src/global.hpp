@@ -37,8 +37,6 @@ const constexpr ivec2 WIN_SIZE {1280, 720};
 const constexpr ivec2 VIEWPORT {600, 700};
 // const constexpr ivec2 VIEWPORT = {880, 660};
 
-namespace stage { class state; } // avoid sol propagation
-
 namespace global {
 
 enum class states {
@@ -52,8 +50,6 @@ struct global_state {
 
   frames elapsed_ticks{0};
   frames elapsed_frames{0};
-
-  std::unique_ptr<stage::state> stage;
 };
 
 void tick();

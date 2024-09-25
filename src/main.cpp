@@ -1,4 +1,3 @@
-#include "stage/state.hpp"
 
 #include "render.hpp"
 #include "global.hpp"
@@ -7,12 +6,14 @@
 
 #include "ui/frontend.hpp"
 
+#include "stage/stage.hpp"
+
 namespace global {
 
 static global_state _state;
 
 void start_stage(std::string path) {
-  _state.stage = std::make_unique<stage::state>(path);
+  stage::load(path);
   _state.current_state = global::states::gameplay;
 }
 
@@ -29,9 +30,22 @@ namespace {
 using window_type = glfw::window<renderer>;
 using imgui_type = imgui::imgui_lib<imgui::glfw_gl3_impl>;
 
-void render_frame(window_type& window, imgui_type& imgui, double dt, double alpha) {
+void render_frame(imgui_type& imgui, double dt, double alpha) {
   imgui.start_frame();
-  render::draw(window, dt, alpha);
+
+  render::clear_viewport();
+  switch (global::_state.current_state) {
+    case global::states::frontend: {
+      render::draw_frontend(dt);
+      break;
+    }
+    case global::states::gameplay: {
+      stage::render(dt, alpha);
+      break;
+    }
+    default: break;
+  }
+
   imgui.end_frame();
 }
 
@@ -41,8 +55,7 @@ void logic_frame() {
 
   switch(global::_state.current_state) {
     case global::states::gameplay: {
-      assert(global::_state.stage && "Stage not initialized");
-      global::_state.stage->tick();
+      stage::tick();
       break;
     }
     case global::states::frontend: {
@@ -71,15 +84,17 @@ int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
     render::post_init(window);
 
     // global init
+    stage::init();
     frontend::init();
     global::_state.current_state = global::states::frontend;
   });
 
   ntf::shogle_main_loop(window, UPS,
-    [&](double dt, double alpha) { render_frame(window, imgui, dt, alpha); },
+    [&](double dt, double alpha) { render_frame(imgui, dt, alpha); },
     [&]() { logic_frame(); }
   );
 
+  stage::destroy();
   res::destroy();
   render::destroy();
   ntf::log::debug("[main] byebye!!");
