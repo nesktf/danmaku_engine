@@ -2,7 +2,13 @@
 
 #include "global.hpp"
 
+#include "stage/entity.hpp"
+#include <list>
+
 namespace stage {
+
+template<typename T>
+using entity_list = std::list<T>;
 
 template<typename T, typename Allocator>
 class entity_pool {

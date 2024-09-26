@@ -134,6 +134,19 @@ void draw_frontend(double dt) {
   }
 }
 
+void draw_text(std::string_view text, color4 color, const mat4& mod) {
+  const auto font = res::get_font("arial").value();
+  const auto font_shader = res::get_shader("font").value();
+  const auto shader_sampler = 0;
+
+  font_shader->use();
+  font_shader->set_uniform("proj", r.win_proj);
+  font_shader->set_uniform("model", mod);
+  font_shader->set_uniform("text_color", color);
+  font_shader->set_uniform("tex", (int)shader_sampler);
+  font->draw_text(vec2{0.f}, 1.f, text);
+}
+
 void clear_viewport() {
   renderer::clear_viewport(color3{.3f});
 }

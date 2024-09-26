@@ -67,6 +67,7 @@ void destroy();
 void draw_sprite(res::sprite sprite, const mat4& mod, const mat4& proj, const mat4& view);
 void draw_background(double dt);
 void draw_frontend(double dt);
+void draw_text(std::string_view text, color4 color, const mat4& mod);
 
 void clear_viewport();
 ivec2 win_size();

@@ -2,7 +2,6 @@
 #include <sol/sol.hpp>
 
 #include "stage/stage.hpp"
-#include "stage/entity.hpp"
 
 #include "resources.hpp"
 #include "render.hpp"
@@ -29,6 +28,78 @@ struct {
 
 } // namespace
 
+class projectile_view {
+public:
+  using iterator = stage::entity_list<stage::projectile>::iterator;
+
+public:
+  projectile_view(std::size_t size) : _size(size) {
+    stage::entity_list<stage::projectile> list;
+
+    const auto atlas = res::get_atlas("effects").value();
+    const auto entry = atlas->group_at(atlas->find_group("star_med").value())[1];
+    const auto aspect = atlas->at(entry).aspect();
+
+    ntf::transform2d transform;
+    transform
+      .set_pos((vec2)VIEWPORT*.5f)
+      .set_scale(aspect*20.f);
+
+    for (size_t i = 0; i < size; ++i) {
+      list.emplace_back(stage::projectile::args{
+        .transform = transform,
+        .movement = stage::entity_movement_linear(cmplx{0.f}),
+        .animator = stage::entity_animator_static(atlas, entry),
+        .clean_flag = false,
+      });
+    }
+    _begin = list.begin();
+    stg.projs.splice(stg.projs.end(), list);
+  }
+
+  void for_each(sol::function f) {
+    auto it = _begin;
+    for (std::size_t i = 0; i < _size; ++i, ++it) {
+      f(*it);
+    }
+  }
+
+public:
+  std::size_t size() const { return _size; }
+
+private:
+  iterator _begin;
+  std::size_t _size;
+};
+
+static stage::entity_movement move_make_linear(sol::table tbl) {
+  cmplx vel = cmplx{tbl.get<float>("real"), tbl.get<float>("imag")};
+  return stage::entity_movement_linear(vel);
+}
+
+static auto funny_lib(sol::this_state s) -> sol::table {
+  sol::state_view lua{s};
+  sol::table module = lua.create_table();
+
+  auto move_type = module.new_usertype<stage::entity_movement>(
+    "move", sol::no_constructor,
+    "make_linear", &move_make_linear
+  );
+
+  auto proj_type = module.new_usertype<stage::projectile>(
+    "proj", sol::no_constructor,
+    "movement", &stage::projectile::movement,
+    "angular_speed", &stage::projectile::angular_speed
+  );
+
+  auto view_type = module.new_usertype<projectile_view>(
+    "pview", sol::call_constructor, sol::constructors<projectile_view(std::size_t)>{},
+    "size", &projectile_view::size,
+    "for_each", &projectile_view::for_each
+  );
+
+  return module;
+};
 
 void stage::init() {
   auto fb_shader = res::get_shader("framebuffer");
@@ -63,12 +134,13 @@ static void prepare_player() {
     .set_pos((vec2)VIEWPORT*.5f)
     .set_scale(sprite_aspect*70.f);
 
+  float sp = 500.f*DT;
   stg.player = stage::player{stage::player::args{
     .transform = transform,
     .atlas = atlas,
     .anim = anim,
-    .base_speed = 350.f*DT,
-    .slow_speed = 350.f*.66f*DT,
+    .base_speed = sp,
+    .slow_speed = sp*.66f,
   }};
 }
 
@@ -131,7 +203,7 @@ static void prepare_lua_env(sol::state_view lua) {
     cmplx proj_pos = cmplx{pos.get<float>("real"), pos.get<float>("imag")};
 
     const auto atlas = res::get_atlas("effects").value();
-    const auto entry = atlas->group_at(atlas->find_group("star_med").value())[1];
+    const auto entry = atlas->group_at(atlas->find_group("star_med").value())[3];
     const auto aspect = atlas->at(entry).aspect();
 
     ntf::transform2d transform;
@@ -152,6 +224,9 @@ static void prepare_lua_env(sol::state_view lua) {
   lua.set_function("__VIEWPORT", []() -> sol::table {
     return stg.lua.create_table_with("x", VIEWPORT.x, "y", VIEWPORT.y);
   });
+
+
+  lua.require("funny_lib", sol::c_call<decltype(&funny_lib), &funny_lib>);
 }
 
 static void reset_state() {
@@ -260,5 +335,17 @@ void stage::render(double dt, [[maybe_unused]] double alpha) {
   });
   render::draw_background(dt);
   stg.viewport.draw(render::win_proj());
+  ntf::transform2d text_transform;
+  text_transform
+    .set_pos(30.f, 100.f)
+    .set_scale(.75f);
+  std::string txt = fmt::format("danmaku: {}", stg.projs.size());
+  render::draw_text(txt, color4{1.f}, text_transform.mat());
+  auto cpos = stg.player.transform.pos();
+  txt = fmt::format("cino pos: {} {}", cpos.x, cpos.y);
+  text_transform.set_pos(30.f, 140.f);
+  render::draw_text(txt, color4{1.f}, text_transform.mat());
+
+
   ++stg.frame_count;
 }

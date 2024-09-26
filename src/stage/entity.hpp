@@ -52,6 +52,7 @@ public:
     movement_type movement;
     animator_type animator;
     real angular_speed {0.f};
+    bool clean_flag {true};
   };
 
 public:
@@ -63,6 +64,7 @@ public:
     movement(arg.movement),
     animator(arg.animator),
     angular_speed(arg.angular_speed),
+    clean_flag(arg.clean_flag),
     _birth(global::state().elapsed_ticks) {}
 
 public:
