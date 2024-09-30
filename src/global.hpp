@@ -1,13 +1,18 @@
 #pragma once
 
-#include <shogle/math/alg.hpp>
+#include <shogle/engine.hpp>
 
 #include <shogle/render/gl.hpp>
 #include <shogle/render/glfw.hpp>
 #include <shogle/render/imgui.hpp>
 
-#include <shogle/engine.hpp>
+#include <shogle/math/alg.hpp>
 
+#undef assert
+#define assert(...) NTF_ASSERT(__VA_ARGS__)
+#define assume(x) NTF_ASSUME(x)
+
+using logger = ntf::log;
 using real = float;
 
 using ntf::vec2;
@@ -36,6 +41,9 @@ const constexpr float VIEWPORT_RATIO = 6.f/7.f;
 const constexpr ivec2 WIN_SIZE {1280, 720};
 const constexpr ivec2 VIEWPORT {600, 700};
 // const constexpr ivec2 VIEWPORT = {880, 660};
+
+using window_type = glfw::window<renderer>;
+using imgui_type = imgui::imgui_lib<imgui::glfw_gl3_impl>;
 
 namespace global {
 

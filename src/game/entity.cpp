@@ -1,10 +1,10 @@
-#include "stage/entity.hpp"
+#include "game/entity.hpp"
 
 #include "input.hpp"
 
-namespace stage {
+namespace game::entity {
 
-void entity_movement::tick(ntf::transform2d& transform) {
+void movement::tick(ntf::transform2d& transform) {
   // const cmplx v0 = vel;
   cmplx pos = transform.cpos();
 
@@ -26,7 +26,7 @@ void entity_movement::tick(ntf::transform2d& transform) {
 }
 
 
-void entity_animator::tick(frames entity_ticks) {
+void animator::tick(frames entity_ticks) {
   if (!use_sequence) {
     return;
   }
@@ -35,56 +35,56 @@ void entity_animator::tick(frames entity_ticks) {
   index = seq[entity_ticks%seq.size()];
 }
 
-res::sprite entity_animator::sprite() const {
+res::sprite animator::sprite() const {
   return res::sprite{handle, index};
 }
 
 
-entity_animator entity_animator_static(res::atlas atlas,
-                                       res::atlas_type::texture_handle index) {
-  return entity_animator {
+animator animator_static(res::sprite sprite) {
+  auto [atlas, index] = sprite;
+  return animator {
     .handle = atlas,
     .index = index,
     .use_sequence = false,
   };
 }
 
-entity_animator entity_animator_sequence(res::atlas atlas,
-                                         res::atlas_type::sequence_handle seq) {
-  return entity_animator {
+animator animator_sequence(res::sequence_pair sequence) {
+  auto [atlas, seq] = sequence;
+  return animator {
     .handle = atlas,
     .sequence = seq,
     .use_sequence = true,
   };
 }
 
-entity_movement entity_movement_linear(cmplx vel) {
-  return entity_movement {
+movement movement_linear(cmplx vel) {
+  return movement {
     .vel = vel,
     .acc = 0,
     .ret = 1,
   };
 }
 
-entity_movement entity_movement_interp(cmplx vel0, cmplx vel1, real ret) {
-  return entity_movement {
+movement movement_interp(cmplx vel0, cmplx vel1, real ret) {
+  return movement {
     .vel = vel0,
     .acc = vel1*(1-ret),
     .ret = ret,
   };
 }
 
-entity_movement entity_movement_interp_hl(cmplx vel0, cmplx vel1, real hl) {
-  return entity_movement_interp(vel0, vel1, std::exp2(-1.f/hl));
+movement movement_interp_hl(cmplx vel0, cmplx vel1, real hl) {
+  return movement_interp(vel0, vel1, std::exp2(-1.f/hl));
 }
 
-entity_movement entity_movement_interp_simple(cmplx vel, real boost) {
-  return entity_movement_interp(vel*(1+boost), vel, .8f);
+movement movement_interp_simple(cmplx vel, real boost) {
+  return movement_interp(vel*(1+boost), vel, .8f);
 }
 
-entity_movement entity_movement_towards(cmplx target, cmplx vel, cmplx attr,
+movement movement_towards(cmplx target, cmplx vel, cmplx attr,
                                         real ret) {
-  return entity_movement {
+  return movement {
     .vel = vel,
     .ret = ret,
     .attr = attr,
@@ -202,4 +202,4 @@ void boss::tick() {
   _lifetime++;
 }
 
-} // namespace stage
+} // namespace game::entity

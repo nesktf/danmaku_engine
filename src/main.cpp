@@ -6,7 +6,11 @@
 
 #include "ui/frontend.hpp"
 
-#include "stage/stage.hpp"
+#include "game/context.hpp"
+
+namespace {
+
+} // namespace
 
 namespace global {
 
@@ -27,8 +31,6 @@ global_state& state() { return _state; }
 
 namespace {
 
-using window_type = glfw::window<renderer>;
-using imgui_type = imgui::imgui_lib<imgui::glfw_gl3_impl>;
 
 void render_frame(imgui_type& imgui, double dt, double alpha) {
   imgui.start_frame();
@@ -66,10 +68,34 @@ void logic_frame() {
   }
 }
 
+res::manager init_resources() {
+  res::manager resources;
+  resources.load_defaults();
+
+  resources.request_shader("sprite",
+                           "res/shader/sprite.vs.glsl", "res/shader/sprite.fs.glsl");
+  resources.request_shader("font",
+                           "res/shader/font.vs.glsl", "res/shader/font.fs.glsl");
+  resources.request_shader("framebuffer",
+                           "res/shader/framebuffer.vs.glsl", "res/shader/framebuffer.fs.glsl");
+  resources.request_shader("frontend",
+                           "res/shader/frontend.vs.glsl", "res/shader/frontend.fs.glsl");
+
+  resources.request_font("arial",
+                         "res/fonts/arial.ttf");
+  
+  return resources;
+}
+
 } // namespace
 
+
 int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
-  ntf::log::set_level(ntf::loglevel::verbose);
+#ifdef NDEBUG
+  logger::set_level(logger::level::info);
+#else
+  logger::set_level(logger::level::verbose);
+#endif
 
   auto glfw = glfw::init();
   glfw::set_swap_interval(0); // disable vsync
@@ -80,22 +106,32 @@ int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
   // Common init
   render::init(window);
   input::init(window); // after global?
-  res::init([&](){
-    render::post_init(window);
 
-    // global init
-    stage::init();
-    frontend::init();
-    global::_state.current_state = global::states::frontend;
-  });
+  {
+    ntf::async_data_loader async_loader;
+    res::manager resources = init_resources();
+    std::unique_ptr<game::context> context;
+    render::stage_viewport vp;
 
-  ntf::shogle_main_loop(window, UPS,
-    [&](double dt, double alpha) { render_frame(imgui, dt, alpha); },
-    [&]() { logic_frame(); }
-  );
+    resources.init_requests(async_loader, [&]() {
+      render::post_init(window, resources);
 
-  stage::destroy();
-  res::destroy();
+      vp.init(VIEWPORT, VIEWPORT/2, (vec2)VIEWPORT*.5f, resources.shader_at("framebuffer"));
+      frontend::init();
+      global::_state.current_state = global::states::frontend;
+    });
+
+
+    ntf::shogle_main_loop(window, UPS,
+      [&](double dt, double alpha) { render_frame(imgui, dt, alpha); },
+      [&]() { async_loader.do_requests(); logic_frame(); }
+    );
+
+    vp.destroy();
+  }
+
+  // stage::destroy();
+  // res::destroy();
   render::destroy();
-  ntf::log::debug("[main] byebye!!");
+  logger::debug("[main] byebye!!");
 }

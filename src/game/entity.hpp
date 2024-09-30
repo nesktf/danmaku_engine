@@ -6,16 +6,16 @@
 
 #include <shogle/scene/transform.hpp>
 
-namespace stage {
+namespace game::entity {
 
 template<typename T>
-concept entity_type = requires(T entity) {
+concept EntityType = requires(T entity) {
   { entity.sprite() } -> std::convertible_to<res::sprite>;
   { entity.mat() } -> std::convertible_to<mat4>;
 };
 
 
-class entity_movement {
+class movement {
 public:
   void tick(ntf::transform2d& transform);
 
@@ -27,7 +27,14 @@ public:
   real attr_exp{};
 };
 
-class entity_animator {
+movement movement_linear(cmplx vel);
+movement movement_interp(cmplx vel0, cmplx vel1, real ret);
+movement movement_interp_hl(cmplx vel0, cmplx vel1, real hl);
+movement movement_interp_simple(cmplx vel, real boost);
+movement movement_towards(cmplx target, cmplx vel, cmplx attr, real ret);
+
+
+class animator {
 public:
   void tick(frames entity_ticks);
 
@@ -36,16 +43,19 @@ public:
 
 public:
   res::atlas handle;
-  res::atlas_type::texture_handle index{};
-  res::atlas_type::sequence_handle sequence{};
+  res::atlas_entry index{};
+  res::atlas_sequence sequence{};
   bool use_sequence {false};
 };
+
+animator animator_static(res::sprite sprite);
+animator animator_sequence(res::sequence_pair sequence);
 
 
 class projectile {
 public:
-  using movement_type = entity_movement;
-  using animator_type = entity_animator;
+  using movement_type = movement;
+  using animator_type = animator;
 
   struct args {
     ntf::transform2d transform{};
@@ -94,8 +104,8 @@ private:
 
 class boss {
 public:
-  using movement_type = entity_movement;
-  using animator_type = entity_animator;
+  using movement_type = movement;
+  using animator_type = animator;
 
   struct args {
     ntf::transform2d transform{};
@@ -219,13 +229,64 @@ public:
   animator_type animator;
 };
 
-entity_animator entity_animator_static(res::atlas atlas, res::atlas_type::texture_handle index);
-entity_animator entity_animator_sequence(res::atlas atlas, res::atlas_type::sequence_handle seq);
+template<EntityType T, typename Allocator>
+class pool {
+public:
+  using allocator_type = Allocator;
 
-entity_movement entity_movement_linear(cmplx vel);
-entity_movement entity_movement_interp(cmplx vel0, cmplx vel1, real ret);
-entity_movement entity_movement_interp_hl(cmplx vel0, cmplx vel1, real hl);
-entity_movement entity_movement_interp_simple(cmplx vel, real boost);
-entity_movement entity_movement_towards(cmplx target, cmplx vel, cmplx attr, real ret);
+private:
+  struct pool_header {
+    pool_header* next;
+  };
 
-} // namespace stage
+public:
+  pool() = default;
+
+public:
+  T* acquire();
+  void release(T* obj);
+
+public:
+  std::size_t used() const { return _used; }
+  std::size_t allocated() const { return _allocated; }
+
+private:
+  allocator_type _allocator;
+  pool_header* _free{nullptr};
+  std::size_t _allocated{0}, _used{0};
+};
+
+} // namespace game::entity
+
+
+namespace game::entity {
+
+template<EntityType T, typename Allocator>
+auto pool<T, Allocator>::acquire() -> T* {
+  pool_header* header = _free;
+  T* obj;
+
+  if (_free) {
+    obj = reinterpret_cast<T*>(_free);
+    _free = _free->next;
+  } else {
+    obj = _allocator.allocate(1);
+    ++_allocated;
+  }
+
+  _allocator.construct(obj, T{});
+  ++_used;
+
+  return obj;
+}
+
+template<EntityType T, typename Allocator>
+void pool<T, Allocator>::release(T* obj) {
+  _allocator.destroy(obj);
+  pool_header* header = reinterpret_cast<pool_header*>(obj);
+  header->next = _free;
+  _free = header;
+  --_used;
+}
+
+} // namespace game::entity

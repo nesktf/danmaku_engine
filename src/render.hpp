@@ -14,20 +14,6 @@ using uniform = renderer::shader_uniform;
 
 using viewport_event = ntf::event<size_t, size_t>;
 
-class ui_renderer {
-public:
-  void init(ivec2 win_size, res::shader shader);
-  void tick(double dt);
-  void draw(const renderer::texture2d& tex, const mat4& win_proj);
-
-private:
-  float _back_time{0.f};
-  ntf::transform2d _ui_root;
-  res::shader _shader;
-  uniform _proj_u, _model_u;
-  uniform _time_u, _sampler_u;
-};
-
 class stage_viewport {
 public:
   void init(ivec2 vp_size, ivec2 center, vec2 pos, res::shader shader);
@@ -61,7 +47,7 @@ void stage_viewport::bind(ivec2 win_size, Fun&& f) {
 
 
 void init(window& win);
-void post_init(window& win);
+void post_init(window& win, res::manager& resources);
 void destroy();
 
 void draw_sprite(res::sprite sprite, const mat4& mod, const mat4& proj, const mat4& view);

@@ -50,6 +50,13 @@ local function main()
   __SPAWN_BOSS(50.0, pi, cmplx.new(-10, -10), cmplx.new(vp.x*0.5, vp.y*0.25))
   task.wait(60)
 
+  local test = funny_lib.cmplx.expi(pi)
+  log.debug("thing %f %f", test.real, test.imag)
+  test = test * 2
+  log.debug("thing %f %f", test.real, test.imag)
+  test.real = test.real * 2
+  log.debug("thing %f %f", test.real, test.imag)
+
   while (true) do
     task.invoke_delayed(20, function()
       move_to_player()
