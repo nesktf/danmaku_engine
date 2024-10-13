@@ -69,7 +69,7 @@ void logic_frame() {
 } // namespace
 
 int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
-  ntf::log::set_level(ntf::loglevel::verbose);
+  ntf::log::set_level(ntf::log::level::verbose);
 
   auto glfw = glfw::init();
   glfw::set_swap_interval(0); // disable vsync
