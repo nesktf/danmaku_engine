@@ -1,5 +1,4 @@
-#include "game/context.hpp"
-#include "game/package.hpp"
+#include "package.hpp"
 
 #include <shogle/core/log.hpp>
 
@@ -9,7 +8,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-bool check_and_get_package(std::string& path, const std::filesystem::path& root) {
+static bool check_and_get_package(std::string& path, const std::filesystem::path& root) {
   const auto main = root / "main.lua";
 
   if (std::filesystem::exists(main)) {
@@ -20,31 +19,20 @@ bool check_and_get_package(std::string& path, const std::filesystem::path& root)
   return false;
 }
 
-const std::string_view default_root = "res/packages";
-
 } // namespace
 
 
-namespace game {
+namespace script {
 
-package::package(std::string path) :
-  _path(std::move(path)) {}
+const std::string_view package::default_root = "res/packages";
 
-std::unique_ptr<context> package::make_context() {
-  auto ctx = std::make_unique<context>(context::context_args{
-    .script = _path,
-    .viewport = VIEWPORT,
-  });
-  return ctx;
-}
-
-std::vector<package> parse_packages(std::string_view package_root) {
+std::vector<package> package::parse_packages(std::string_view package_root) {
   std::vector<package> packs;
 
   fs::directory_iterator it;
   if (package_root.empty()) {
     ntf::log::warning("[script::package] Using default package root for parsing");
-    it = fs::directory_iterator(default_root);
+    it = fs::directory_iterator(package::default_root);
   } else {
     it = fs::directory_iterator(package_root);
   }
@@ -64,4 +52,4 @@ std::vector<package> parse_packages(std::string_view package_root) {
   return packs;
 }
 
-} // namespace game
+} // namespace script

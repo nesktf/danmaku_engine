@@ -1,240 +1,38 @@
 #include "resources.hpp"
 
-namespace res {
+namespace {
 
-shader_type shader_data::loader::operator()(shader_data data) {
-  shader_type::loader loader;
-  return loader(ntf::file_contents(data.vert), ntf::file_contents(data.frag));
-}
-
-shader_type shader_data::loader::operator()(std::string vert, std::string frag) {
-  return (*this)(shader_data{std::move(vert), std::move(frag)});
-}
-
-void manager::load_defaults() {
-  _atlas.emplace("default", atlas_type{default_texture()});
-  _textures.emplace("default", default_texture());
-}
-
-void manager::init_requests(ntf::async_data_loader& loader, std::function<void()> callback) {
-  size_t res_total = _shader_req.size() + _font_req.size() +
-                     _atlas_req.size() + _texture_req.size();
-
-  auto on_load = [=](pool_handle, std::string) {
-    if (++_async_count < res_total) {
-      return;
+struct shader_data {
+  struct loader {
+    res::shader_type operator()(shader_data data) {
+      res::shader_type::loader loader;
+      return loader(ntf::file_contents(data.vert), ntf::file_contents(data.frag));
     }
-    callback();
+    res::shader_type operator()(std::string vert, std::string frag) {
+      return (*this)(shader_data{std::move(vert), std::move(frag)});
+    }
   };
+  shader_data(std::string vert_, std::string frag_) :
+    vert(std::move(vert_)), frag(std::move(frag_)) {};
+  std::string vert, frag;
+};
 
-  _async_count = 0;
-  ntf::tex_filter filter{ntf::tex_filter::nearest};
-  ntf::tex_wrap wrap{ntf::tex_wrap::repeat};
+struct {
+  std::vector<std::tuple<std::string, std::string, std::string>> shader_req;
+  std::vector<std::tuple<std::string, std::string>> texture_req;
+  std::vector<std::tuple<std::string, std::string>> font_req;
+  std::vector<std::tuple<std::string, std::string>> atlas_req;
 
-  for (auto& [name, vert_path, frag_path] : _shader_req) {
-    _shaders.enqueue(std::move(name), loader, on_load,
-                     std::move(vert_path), std::move(frag_path));
-  }
+  ntf::resource_pool<res::shader_type, shader_data> shaders;
+  ntf::resource_pool<res::texture_type, res::texture_data> textures;
+  ntf::resource_pool<res::font_type, res::font_data> fonts;
+  ntf::resource_pool<res::atlas_type, res::atlas_data> atlas;
 
-  for (auto& [name, path] : _font_req) {
-    _fonts.enqueue(std::move(name), loader, on_load,
-                   std::move(path));
-  }
+  ntf::async_data_loader loader;
+  uint async_count {0};
+} _res;
 
-  for (auto& [name, path] : _atlas_req) {
-    _atlas.enqueue(std::move(name), loader, on_load,
-                   std::move(path), filter, wrap);
-  }
-
-  for (auto& [name, path] : _texture_req) {
-    _textures.enqueue(std::move(name), loader, on_load,
-                      std::move(path), filter, wrap);
-  }
-
-  _clear_req();
-}
-
-void manager::request_shader(std::string name, std::string vert_path, std::string frag_path) {
-  _shader_req.emplace_back(
-    std::make_tuple(std::move(name), std::move(vert_path), std::move(frag_path))
-  );
-}
-
-void manager::request_font(std::string name, std::string path) {
-  _font_req.emplace_back(
-    std::make_tuple(std::move(name), std::move(path))
-  );
-}
-
-void manager::request_atlas(std::string name, std::string path) {
-  _atlas_req.emplace_back(
-    std::make_tuple(std::move(name), std::move(path))
-  );
-}
-
-void manager::request_texture(std::string name, std::string path) {
-  _texture_req.emplace_back(
-    std::make_tuple(std::move(name), std::move(path))
-  );
-}
-
-void manager::emplace_shader(std::string name, shader_type shader) {
-  _shaders.emplace(std::move(name), std::move(shader));
-}
-
-void manager::emplace_font(std::string name, font_type font) {
-  _fonts.emplace(std::move(name), std::move(font));
-}
-
-void manager::emplace_atlas(std::string name, atlas_type atlas) {
-  _atlas.emplace(std::move(name), std::move(atlas));
-}
-
-void manager::emplace_texture(std::string name, texture_type texture) {
-  _textures.emplace(std::move(name), std::move(texture));
-}
-
-void manager::free(font font) {
-  _fonts.unload(font.pool_id());
-}
-
-void manager::free(shader shader) {
-  _shaders.unload(shader.pool_id());
-}
-
-void manager::free(atlas atlas) {
-  _atlas.unload(atlas.pool_id());
-}
-
-void manager::free(texture texture) {
-  _textures.unload(texture.pool_id());
-}
-
-font manager::font_at(std::string_view name) const {
-  auto found = _fonts.find(name);
-  assert(found && "Font not found!");
-  return font{this, found.value()};
-}
-
-shader manager::shader_at(std::string_view name) const {
-  auto found = _shaders.find(name);
-  assert(found && "Shader not found!");
-  return shader{this, found.value()};
-}
-
-texture manager::texture_at(std::string_view name) const {
-  auto found = _textures.find(name);
-  assert(found && "Texture not found!");
-  return texture{this, found.value()};
-}
-
-atlas manager::atlas_at(std::string_view name) const {
-  auto found = _atlas.find(name);
-  assert(found && "Atlas not found!");
-  return atlas{this, found.value()};
-}
-
-sequence_pair manager::sequence_at(std::string_view atlas_name, std::string_view seq) const {
-  auto found_atlas = _atlas.find(atlas_name);
-  assert(found_atlas && "Atlas not found!");
-
-  const auto& atl = _atlas.at(found_atlas.value());
-  auto found_seq = atl.find_sequence(seq);
-  assert(found_seq && "Sequence not found!");
-
-  return sequence_pair{atlas{this, found_atlas.value()}, found_seq.value()};
-}
-
-group_pair manager::group_at(std::string_view atlas_name, std::string_view group) const {
-  auto found_atlas = _atlas.find(atlas_name);
-  assert(found_atlas && "Atlas not found!");
-
-  const auto& atl = _atlas.at(found_atlas.value());
-  auto found_group = atl.find_group(group);
-  assert(found_group && "Group not found!");
-
-  return group_pair{atlas{this, found_atlas.value()}, found_group.value()};
-}
-
-std::optional<font> manager::font_opt(std::string_view name) const {
-  auto found = _fonts.find(name);
-  if (!found) {
-    return std::nullopt;
-  }
-  return {font{this, found.value()}};
-}
-
-std::optional<shader> manager::shader_opt(std::string_view name) const {
-  auto found = _shaders.find(name);
-  if (!found) {
-    return std::nullopt;
-  }
-  return {shader{this, found.value()}};
-}
-
-std::optional<texture> manager::texture_opt(std::string_view name) const {
-  auto found = _textures.find(name);
-  if (!found) {
-    return std::nullopt;
-  }
-  return {texture{this, found.value()}};
-}
-
-std::optional<atlas> manager::atlas_opt(std::string_view name) const {
-  auto found = _atlas.find(name);
-  if (!found) {
-    return std::nullopt;
-  }
-  return {atlas{this, found.value()}};
-}
-
-std::optional<sequence_pair> manager::sequence_opt(std::string_view atlas_name,
-                                                   std::string_view seq) const {
-  auto found_atlas = _atlas.find(atlas_name);
-  if (!found_atlas) {
-    return std::nullopt;
-  }
-
-  const auto& atl = _atlas.at(found_atlas.value());
-  auto found_seq = atl.find_sequence(seq);
-  if (!found_seq) {
-    return std::nullopt;
-  }
-
-  return {sequence_pair{atlas{this, found_atlas.value()}, found_seq.value()}};
-}
-
-std::optional<group_pair> manager::group_opt(std::string_view atlas_name,
-                                             std::string_view group) const {
-  auto found_atlas = _atlas.find(atlas_name);
-  if (!found_atlas) {
-    return std::nullopt;
-  }
-
-  const auto& atl = _atlas.at(found_atlas.value());
-  auto found_group = atl.find_group(group);
-  if (!found_group) {
-    return std::nullopt;
-  }
-
-  return group_pair{atlas{this, found_atlas.value()}, found_group.value()};
-}
-
-void manager::clear() {
-  _shaders.clear();
-  _fonts.clear();
-  _atlas.clear();
-  _textures.clear();
-}
-
-void manager::_clear_req() {
-  _shader_req.clear();
-  _texture_req.clear();
-  _font_req.clear();
-  _atlas_req.clear();
-}
-
-texture_type default_texture() {
+res::texture_type default_texture() {
   uint8_t pixels[] = {0x0, 0x0, 0x0, 0xFE, 0x0, 0xFE, 0x0, 0x0, 0xFE, 0x0, 0xFE, 0x00};
   res::texture_type tex{&pixels[0], ivec2{2, 2}, ntf::tex_format::rgb};
   tex.set_filter(ntf::tex_filter::nearest);
@@ -242,29 +40,277 @@ texture_type default_texture() {
   return tex;
 }
 
+} // namespace
 
-// void init(std::function<void()> callback) {
-//   // shaders
-//   request_shader("sprite", "res/shader/sprite.vs.glsl", "res/shader/sprite.fs.glsl");
-//   request_shader("font", "res/shader/font.vs.glsl", "res/shader/font.fs.glsl");
-//   request_shader("framebuffer", "res/shader/framebuffer.vs.glsl", "res/shader/framebuffer.fs.glsl");
-//   request_shader("frontend", "res/shader/frontend.vs.glsl", "res/shader/frontend.fs.glsl");
+
+namespace res {
+
+void init(std::function<void()> callback) {
+  // shaders
+  request_shader("sprite", "res/shader/sprite.vs.glsl", "res/shader/sprite.fs.glsl");
+  request_shader("font", "res/shader/font.vs.glsl", "res/shader/font.fs.glsl");
+  request_shader("framebuffer", "res/shader/framebuffer.vs.glsl", "res/shader/framebuffer.fs.glsl");
+  request_shader("frontend", "res/shader/frontend.vs.glsl", "res/shader/frontend.fs.glsl");
+
+  // sprites
+  _res.atlas.emplace("default", atlas_type{default_texture()});
+  request_atlas("enemies", "res/spritesheet/enemies.json");
+  request_atlas("effects", "res/spritesheet/effects.json");
+  request_atlas("chara_reimu", "res/spritesheet/chara_reimu.json");
+  request_atlas("chara_marisa", "res/spritesheet/chara_marisa.json");
+  request_atlas("chara_cirno", "res/spritesheet/chara_cirno.json");
+
+  // fonts
+  request_font("arial", "res/fonts/arial.ttf");
+
+  // textures
+  _res.textures.emplace("default", default_texture());
+
+  start_loading(callback);
+}
+
+void destroy() {
+  _res.shaders.clear();
+  _res.fonts.clear();
+  _res.atlas.clear();
+  _res.textures.clear();
+}
+
+void request_shader(std::string name, std::string vert_path, std::string frag_path) {
+  _res.shader_req.emplace_back(
+    std::make_tuple(std::move(name), std::move(vert_path), std::move(frag_path))
+  );
+}
+
+void request_font(std::string name, std::string path) {
+  _res.font_req.emplace_back(
+    std::make_tuple(std::move(name), std::move(path))
+  );
+}
+
+void request_atlas(std::string name, std::string path) {
+  _res.atlas_req.emplace_back(
+    std::make_tuple(std::move(name), std::move(path))
+  );
+}
+
+void do_requests() {
+  _res.loader.do_requests();
+}
+
+void start_loading(std::function<void()> callback) {
+  size_t res_total = _res.shader_req.size() + _res.font_req.size() +
+                     _res.atlas_req.size() + _res.texture_req.size();
+
+  auto on_load = [=](pool_handle handle, std::string name) {
+    ntf::log::debug("[res::start_loading] Resource loaded, {} (id: {})", name, handle);
+    if (++_res.async_count < res_total) {
+      return;
+    }
+    ntf::log::debug("[res::start_loading] Loading complete, {} items", res_total);
+    callback();
+  };
+
+  _res.async_count = 0;
+  ntf::tex_filter def_filter = ntf::tex_filter::nearest;
+  ntf::tex_wrap def_wrap = ntf::tex_wrap::repeat;
+
+  for (auto& [name, vert_path, frag_path] : _res.shader_req) {
+    _res.shaders.enqueue(std::move(name), _res.loader, on_load,
+                         std::move(vert_path), std::move(frag_path));
+  }
+
+  for (auto& [name, path] : _res.font_req) {
+    _res.fonts.enqueue(std::move(name), _res.loader, on_load, 
+                       std::move(path));
+  }
+
+  for (auto& [name, path] : _res.atlas_req) {
+    _res.atlas.enqueue(std::move(name), _res.loader, on_load,
+                       std::move(path), def_filter, def_wrap);
+  }
+
+  for (auto& [name, path] : _res.texture_req) {
+    _res.textures.enqueue(std::move(name), _res.loader, on_load,
+                          std::move(path), def_filter, def_wrap);
+  }
+
+  _res.shader_req.clear();
+  _res.font_req.clear();
+  _res.atlas_req.clear();
+  ntf::log::debug("[res::start_loading] Enqueued {} resources", res_total);
+}
+
+const shader_type& shader_getter::operator()(pool_handle id) { return _res.shaders[id]; }
+const font_type& font_getter::operator()(pool_handle id) { return _res.fonts[id]; }
+const atlas_type& atlas_getter::operator()(pool_handle id) { return _res.atlas[id]; }
+const texture_type& texture_getter::operator()(pool_handle id) { return _res.textures[id]; }
+
+std::optional<shader> get_shader(std::string_view name) {
+  auto shader = _res.shaders.find(name);
+  if (shader) {
+    return std::make_optional(static_cast<pool_handle>(shader.value()));
+  }
+  ntf::log::warning("[res::shader_from_name] Shader not found: \"{}\"", name);
+  return {};
+}
+
+std::optional<font> get_font(std::string_view name) {
+  auto font = _res.fonts.find(name);
+  if (font) {
+    return std::make_optional(static_cast<pool_handle>(font.value()));
+  }
+  ntf::log::warning("[res::font_from_name] Font not found: \"{}\"", name);
+  return {};
+}
+
+std::optional<atlas> get_atlas(std::string_view name) {
+  auto atlas = _res.atlas.find(name);
+  if (atlas) {
+    return std::make_optional(static_cast<pool_handle>(atlas.value()));
+  }
+  ntf::log::warning("[res::atlas_from_name] Atlas not found: \"{}\"", name);
+  return {};
+}
+
+std::optional<atlas_type::sequence_handle> get_atlas_sequence(std::string_view atlas, std::string_view seq) {
+  auto atlas_handle = get_atlas(atlas);
+  if (!atlas_handle) {
+    ntf::log::warning("[res::get_atlas_sequence] Atlas not found: \"{}\"", atlas);
+    return {};
+  }
+  auto seq_handle = atlas_handle.value()->find_sequence(seq);
+  if (!seq_handle) {
+    ntf::log::warning("[res::get_atlas_sequence] Sequence \"{}\" not found in atlas \"{}\"", seq, atlas);
+    return {};
+  }
+  return seq_handle.value();
+}
+
+std::optional<atlas_type::sequence_handle> get_atlas_sequence(atlas atlas_handle, std::string_view seq) {
+  auto seq_handle = atlas_handle->find_sequence(seq);
+  if (!seq_handle) {
+    ntf::log::warning("[res::get_atlas_sequence] Sequence \"{}\" not found in atlas \"{}\"", seq, atlas_handle.id());
+    return {};
+  }
+  return seq_handle.value();
+}
+
+std::optional<texture> get_texture(std::string_view name) {
+  auto texture = _res.textures.find(name);
+  if (texture) {
+    return std::make_optional(static_cast<pool_handle>(texture.value()));
+  }
+  ntf::log::warning("[res::texture_from_name] Texture not found: \"{}\"", name);
+  return {};
+}
+
+void free(shader shader) {
+  ntf::log::debug("[res::free] Shader slot {} issued for reuse", shader.id());
+  _res.shaders.unload(shader.id());
+}
+
+void free(font font) {
+  ntf::log::debug("[res::free] Font slot {} issued for reuse", font.id());
+  _res.fonts.unload(font.id());
+}
+
+void free(atlas atlas) {
+  ntf::log::debug("[res::free] Atlas slot {} issued for reuse", atlas.id());
+  _res.atlas.unload(atlas.id());
+}
+
+void free(texture texture) {
+  ntf::log::debug("[res::free] Texture slot {} issued for reuse", texture.id());
+  _res.textures.unload(texture.id());
+}
 //
-//   // sprites
-//   _res.atlas.emplace("default", atlas_type{default_texture()});
-//   request_atlas("enemies", "res/spritesheet/enemies.json");
-//   request_atlas("effects", "res/spritesheet/effects.json");
-//   request_atlas("chara_reimu", "res/spritesheet/chara_reimu.json");
-//   request_atlas("chara_marisa", "res/spritesheet/chara_marisa.json");
-//   request_atlas("chara_cirno", "res/spritesheet/chara_cirno.json");
-//
-//   // fonts
-//   request_font("arial", "res/fonts/arial.ttf");
-//
-//   // textures
-//   _res.textures.emplace("default", default_texture());
-//
-//   start_loading(callback);
+// static inline sprite default_sprite() {
+//   return sprite{.handle={0}, .index=0};
 // }
+//
+// sprite sprite_from_index(atlas handle, atlas_type::texture_handle index) {
+//   assert(handle->size() > index && "Invalid atlas index");
+//   return sprite {.handle = handle, .index = index};
+// }
+//
+// sprite sprite_from_index(std::string_view atlas, atlas_type::texture_handle index) {
+//   auto atlas_handle = get_atlas(atlas);
+//   if (!atlas_handle) {
+//     ntf::log::warning("[res::sprite_from_index] Atlas not found \"{}\"", atlas);
+//     return default_sprite();
+//   }
+//   if (atlas_handle.value()->size() <= index) {
+//     ntf::log::warning("[res::sprite_from_index] Index \"{}\" out of bounds for atlas \"{}\"", atlas, index);
+//     return default_sprite();
+//   }
+//   return sprite_from_index(atlas_handle.value(), index);
+// }
+//
+// sprite sprite_from_group(atlas handle, atlas_type::group_handle group, atlas_type::texture_handle index) {
+//   assert(handle->size() > index && "Invalid atlas index");
+//   assert(handle->group_count() > group && "Invalid atlas group");
+//   return sprite{.handle = handle, .index = handle->group_at(group)[index]};
+// }
+//
+// sprite sprite_from_group(atlas handle, std::string_view group, atlas_type::texture_handle index) {
+//   if (handle->size() <= index) {
+//     ntf::log::warning("[res::sprite_from_group] Index \"{}\" out of bounds for atlas \"{}\"", handle.id(), index);
+//     return default_sprite();
+//   }
+//   auto group_handle = handle->find_group(group);
+//   if (!group_handle) {
+//     ntf::log::warning("[res::sprite_from_group] Group \"{}\" not found in atlas \"{}\"", group, handle.id());
+//     return default_sprite();
+//   }
+//   return sprite_from_group(handle, group_handle.value(), index);
+// }
+//
+// sprite sprite_from_group(std::string_view atlas, std::string_view group, atlas_type::texture_handle index) {
+//   auto atlas_handle = get_atlas(atlas);
+//   if (!atlas_handle) {
+//     ntf::log::warning("[res::sprite_from_group] Atlas not found \"{}\"", atlas);
+//     return default_sprite();
+//   }
+//   if (atlas_handle.value()->size() <= index) {
+//     ntf::log::warning("[res::sprite_from_group] Index \"{}\" out of bounds for atlas \"{}\"", atlas, index);
+//     return default_sprite();
+//   }
+//   auto group_handle = atlas_handle.value()->find_group(group);
+//   if (!group_handle) {
+//     ntf::log::warning("[res::sprite_from_group] Group \"{}\" not found in atlas \"{}\"", group, atlas);
+//     return default_sprite();
+//   }
+//   return sprite_from_group(atlas_handle.value(), group_handle.value(), index);
+// }
+//
+// sprite sprite_from_sequence(atlas handle, atlas_type::sequence_handle seq) {
+//   assert(handle->size() > seq && "Invalid atlas sequence");
+//   return sprite{.handle = handle, .sequence = seq};
+// }
+//
+// sprite sprite_from_sequence(atlas handle, std::string_view seq) {
+//   auto seq_handle = handle->find_sequence(seq);
+//   if (!seq_handle) {
+//     ntf::log::warning("[res::sprite_from_sequence] Sequence \"{}\" not found in atlas \"{}\"", seq, handle.id());
+//     return default_sprite();
+//   }
+//   return sprite_from_sequence(handle, seq_handle.value());
+// }
+//
+// sprite sprite_from_sequence(std::string_view atlas, std::string_view seq) {
+//   auto atlas_handle = get_atlas(atlas);
+//   if (!atlas_handle) {
+//     ntf::log::warning("[res::sprite_from_sequence] Atlas not found \"{}\"", atlas);
+//     return default_sprite();
+//   }
+//   auto seq_handle = atlas_handle.value()->find_sequence(seq);
+//   if (!seq_handle) {
+//     ntf::log::warning("[res::sprite_from_sequence] Sequence \"{}\" not found in atlas \"{}\"", seq, atlas);
+//     return default_sprite();
+//   }
+//   return sprite_from_sequence(atlas_handle.value(), seq_handle.value());
+// }
+//
 
 } // namespace res

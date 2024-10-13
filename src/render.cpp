@@ -50,63 +50,15 @@ void sprite_renderer::draw(res::sprite sprite, const color4& color,
   renderer::draw_quad();
 }
 
-class ui_renderer {
-public:
-  void init(ivec2 win_size, res::shader shader, res::texture back_tex);
-  void tick(double dt);
-  void draw(const mat4& win_proj);
-
-private:
-  float _back_time{0.f};
-  ntf::transform2d _ui_root;
-  res::shader _shader;
-  res::texture _back_tex;
-  render::uniform _proj_u, _model_u;
-  render::uniform _time_u, _sampler_u;
-};
-
-void ui_renderer::init(ivec2 win_size, res::shader shader, res::texture back_tex) {
-  _shader = shader;
-  _back_tex = back_tex;
-
-  _shader->uniform_location(_proj_u, "proj");
-  _shader->uniform_location(_model_u, "model");
-  _shader->uniform_location(_time_u, "time");
-  _shader->uniform_location(_sampler_u, "tex");
-
-  _ui_root.set_pos((vec2)win_size*.5f).set_scale(win_size);
-}
-
-void ui_renderer::tick(double dt) {
-  _back_time += dt;
-}
-
-void ui_renderer::draw(const mat4& win_proj) {
-  const auto sampler = 0;
-
-  _shader->use();
-  _shader->set_uniform(_proj_u, win_proj);
-  _shader->set_uniform(_model_u, _ui_root.mat());
-  _shader->set_uniform(_time_u, _back_time);
-
-  _shader->set_uniform(_sampler_u, (int)sampler);
-  _back_tex->bind_sampler((size_t)sampler);
-
-  renderer::draw_quad();
-}
-
-
 struct {
-  ui_renderer ui;
+  render::ui_renderer ui;
+  // render::stage_viewport stage;
   sprite_renderer sprite;
 
   mat4 win_proj;
   ivec2 win_size;
 
   render::viewport_event vp_event;
-
-  res::font font;
-  res::shader font_shader;
 } r;
 
 } // namespace
@@ -131,30 +83,31 @@ void init(ntf::glfw::window<renderer>& window) {
   });
 }
 
-void post_init(ntf::glfw::window<renderer>& win, res::manager& resources) {
+void post_init(ntf::glfw::window<renderer>& win) {
   // Prepare shaders and things
-  auto sprite_shader = resources.shader_at("sprite");
-  auto front_shader = resources.shader_at("frontend");
-  auto back_tex = resources.texture_at("default");
-  r.font = resources.font_at("arial");
-  r.font_shader = resources.shader_at("font");
+  auto sprite_shader = res::get_shader("sprite");
+  auto front_shader = res::get_shader("frontend");
 
   auto vp = win.size();
 
   r.win_size = vp;
   r.win_proj = glm::ortho(0.f, (float)vp.x, (float)vp.y, 0.f, -10.f, 1.f);
-  r.ui.init(vp, front_shader, back_tex);
-  r.sprite.init(sprite_shader);
+  r.ui.init(vp, front_shader.value());
+  r.sprite.init(sprite_shader.value());
 }
 
 void draw_background(double dt) {
+  const auto& back = res::texture{0}.get();
   r.ui.tick(dt);
-  r.ui.draw(r.win_proj);
+  r.ui.draw(back, r.win_proj);
 }
 
 void draw_frontend(double dt) {
   // TODO: Move this thing to a widget class
   render::draw_background(dt);
+
+  const auto& font = res::get_font("arial")->get();
+  const auto& font_shader = res::get_shader("font")->get();
 
   auto& menu = frontend::instance().entry();
   render::draw_sprite(menu.background, menu.back_transform.mat(), r.win_proj, mat4{1.f});
@@ -172,24 +125,26 @@ void draw_frontend(double dt) {
 
     const auto shader_sampler = 0;
 
-    r.font_shader->use();
-    r.font_shader->set_uniform("proj", r.win_proj);
-    r.font_shader->set_uniform("model", font_transform.mat());
-    r.font_shader->set_uniform("text_color", col);
-    r.font_shader->set_uniform("tex", (int)shader_sampler);
-    r.font->draw_text(vec2{0.f, 0.f}, 1.f, menu.entries[i].text);
+    font_shader.use();
+    font_shader.set_uniform("proj", r.win_proj);
+    font_shader.set_uniform("model", font_transform.mat());
+    font_shader.set_uniform("text_color", col);
+    font_shader.set_uniform("tex", (int)shader_sampler);
+    font.draw_text(vec2{0.f, 0.f}, 1.f, menu.entries[i].text);
   }
 }
 
 void draw_text(std::string_view text, color4 color, const mat4& mod) {
+  const auto font = res::get_font("arial").value();
+  const auto font_shader = res::get_shader("font").value();
   const auto shader_sampler = 0;
 
-  r.font_shader->use();
-  r.font_shader->set_uniform("proj", r.win_proj);
-  r.font_shader->set_uniform("model", mod);
-  r.font_shader->set_uniform("text_color", color);
-  r.font_shader->set_uniform("tex", (int)shader_sampler);
-  r.font->draw_text(vec2{0.f}, 1.f, text);
+  font_shader->use();
+  font_shader->set_uniform("proj", r.win_proj);
+  font_shader->set_uniform("model", mod);
+  font_shader->set_uniform("text_color", color);
+  font_shader->set_uniform("tex", (int)shader_sampler);
+  font->draw_text(vec2{0.f}, 1.f, text);
 }
 
 void clear_viewport() {
@@ -214,6 +169,36 @@ viewport_event::subscription vp_subscribe(viewport_event::callback callback) {
 
 void vp_unsuscribe(viewport_event::subscription sub) {
   r.vp_event.unsubscribe(sub);
+}
+
+
+void ui_renderer::init(ivec2 win_size, res::shader shader) {
+  _shader = shader;
+
+  _shader->uniform_location(_proj_u, "proj");
+  _shader->uniform_location(_model_u, "model");
+  _shader->uniform_location(_time_u, "time");
+  _shader->uniform_location(_sampler_u, "tex");
+
+  _ui_root.set_pos((vec2)win_size*.5f).set_scale(win_size);
+}
+
+void ui_renderer::tick(double dt) {
+  _back_time += dt;
+}
+
+void ui_renderer::draw(const renderer::texture2d& tex, const mat4& win_proj) {
+  const auto sampler = 0;
+
+  _shader->use();
+  _shader->set_uniform(_proj_u, win_proj);
+  _shader->set_uniform(_model_u, _ui_root.mat());
+  _shader->set_uniform(_time_u, _back_time);
+
+  _shader->set_uniform(_sampler_u, (int)sampler);
+  tex.bind_sampler((size_t)sampler);
+
+  renderer::draw_quad();
 }
 
 void stage_viewport::init(ivec2 vp_size, ivec2 center, vec2 pos, res::shader shader) {
