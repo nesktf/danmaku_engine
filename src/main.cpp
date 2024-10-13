@@ -1,4 +1,3 @@
-
 #include "render.hpp"
 #include "global.hpp"
 #include "resources.hpp"
@@ -8,12 +7,15 @@
 
 #include "stage/stage.hpp"
 
+
+static std::unique_ptr<stage::context> stage_ctx;
+
 namespace global {
 
 static global_state _state;
 
 void start_stage(std::string path) {
-  stage::load(path);
+  stage_ctx = std::make_unique<stage::context>(path);
   _state.current_state = global::states::gameplay;
 }
 
@@ -25,48 +27,6 @@ global_state& state() { return _state; }
 
 } // namespace global
 
-namespace {
-
-using window_type = glfw::window<renderer>;
-using imgui_type = imgui::imgui_lib<imgui::glfw_gl3_impl>;
-
-void render_frame(imgui_type& imgui, double dt, double alpha) {
-  imgui.start_frame();
-
-  render::clear_viewport();
-  switch (global::_state.current_state) {
-    case global::states::frontend: {
-      render::draw_frontend(dt);
-      break;
-    }
-    case global::states::gameplay: {
-      stage::render(dt, alpha);
-      break;
-    }
-    default: break;
-  }
-
-  imgui.end_frame();
-}
-
-void logic_frame() {
-  global::_state.elapsed_ticks++;
-  res::do_requests();
-
-  switch(global::_state.current_state) {
-    case global::states::gameplay: {
-      stage::tick();
-      break;
-    }
-    case global::states::frontend: {
-      frontend::tick();
-      break;
-    }
-    default: break;
-  }
-}
-
-} // namespace
 
 int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
   ntf::log::set_level(ntf::log::level::verbose);
@@ -84,17 +44,50 @@ int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
     render::post_init(window);
 
     // global init
-    stage::init();
     frontend::init();
     global::_state.current_state = global::states::frontend;
   });
 
   ntf::shogle_main_loop(window, UPS,
-    [&](double dt, double alpha) { render_frame(imgui, dt, alpha); },
-    [&]() { logic_frame(); }
+    [&](double dt, double alpha) {
+      auto& state = global::state();
+      imgui.start_frame();
+
+      render::clear_viewport();
+      switch (state.current_state) {
+        case global::states::frontend: {
+          render::draw_frontend(dt);
+          break;
+        }
+        case global::states::gameplay: {
+          stage_ctx->render(dt, alpha);
+          break;
+        }
+        default: break;
+      }
+
+      imgui.end_frame();
+    },
+    [&]() {
+      auto& state = global::state();
+      state.elapsed_ticks++;
+      res::do_requests();
+
+      switch(state.current_state) {
+        case global::states::gameplay: {
+          stage_ctx->tick();
+          break;
+        }
+        case global::states::frontend: {
+          frontend::tick();
+          break;
+        }
+        default: break;
+      }
+    }
   );
 
-  stage::destroy();
+  stage_ctx.reset();
   res::destroy();
   render::destroy();
   ntf::log::debug("[main] byebye!!");

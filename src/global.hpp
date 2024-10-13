@@ -37,6 +37,9 @@ const constexpr ivec2 WIN_SIZE {1280, 720};
 const constexpr ivec2 VIEWPORT {600, 700};
 // const constexpr ivec2 VIEWPORT = {880, 660};
 
+using window_type = glfw::window<renderer>;
+using imgui_type = imgui::imgui_lib<imgui::glfw_gl3_impl>;
+
 namespace global {
 
 enum class states {

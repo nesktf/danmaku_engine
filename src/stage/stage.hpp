@@ -1,6 +1,9 @@
 #pragma once
 
+#include <sol/sol.hpp>
+
 #include "global.hpp"
+#include "render.hpp"
 
 #include "stage/entity.hpp"
 #include <list>
@@ -37,13 +40,58 @@ private:
   std::size_t _allocated{0}, _used{0};
 };
 
-void init();
-void destroy();
+class context {
+public:
+  context(std::string_view stage_script);
 
-void load(std::string_view stage_script);
+public:
+  void tick();
+  void render(double dt, [[maybe_unused]] double alpha);
 
-void tick();
-void render(double dt, [[maybe_unused]] double alpha);
+public:
+  std::list<stage::projectile>& projs() { return _projs; }
+
+private:
+  void _prepare_player();
+  void _prepare_lua_env();
+
+private:
+  sol::state _lua;
+  sol::protected_function _entrypoint;
+
+  frames _tick_count{0}, _frame_count{0};
+  frames _task_time{0}, _task_wait{0};
+
+  std::list<stage::projectile> _projs;
+  stage::boss _boss;
+  stage::player _player;
+
+  render::stage_viewport _viewport;
+
+  render::viewport_event::subscription _vp_sub;
+
+public:
+  ~context() noexcept;
+  NTF_DISABLE_COPY(context);
+};
+
+class projectile_view {
+public:
+  using iterator = stage::entity_list<stage::projectile>::iterator;
+
+public:
+  projectile_view(std::size_t size);
+
+public:
+  void for_each(sol::function f);
+
+public:
+  std::size_t size() const { return _size; }
+
+private:
+  iterator _begin;
+  std::size_t _size;
+};
 
 } // namespace stage
 
