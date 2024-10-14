@@ -22,7 +22,7 @@ void entity_movement::tick(ntf::transform2d& transform) {
     }
   }
 
-  transform.set_pos(pos);
+  transform.pos(pos);
 }
 
 
@@ -121,7 +121,7 @@ void player::movement_type::tick(ntf::transform2d& transform) {
 
   const vec2 clamp_min{0.f};
   const vec2 clamp_max{VIEWPORT};
-  transform.set_pos(glm::clamp(math::conv(transform.cpos() + _vel), clamp_min, clamp_max));
+  transform.pos(glm::clamp(math::conv(transform.cpos() + _vel), clamp_min, clamp_max));
 }
 
 void player::animator_type::tick(const movement_type& movement) {
@@ -188,7 +188,7 @@ void player::tick() {
 
 void projectile::tick() {
   movement.tick(transform);
-  transform.set_rot(transform.rot() + angular_speed);
+  transform.rot(transform.rot() + angular_speed);
 
   animator.tick(_lifetime);
 

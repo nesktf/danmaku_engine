@@ -72,8 +72,8 @@ void context::_lua_post_open(sol::table stlib) {
 
     ntf::transform2d transform;
     transform
-      .set_pos(p0)
-      .set_scale(scale*aspect);
+      .pos(p0)
+      .scale(scale*aspect);
 
     _boss = stage::boss{stage::boss::args{
       .transform = transform,
@@ -101,8 +101,8 @@ void context::_lua_post_open(sol::table stlib) {
 
     ntf::transform2d transform;
     transform
-      .set_pos(pos)
-      .set_scale(aspect*20.f);
+      .pos(pos)
+      .scale(aspect*20.f);
 
     _projs.emplace_back(stage::projectile::args {
       .transform = transform,
@@ -163,8 +163,8 @@ void context::_prepare_player() {
 
   ntf::transform2d transform;
   transform
-    .set_pos((vec2)VIEWPORT*.5f)
-    .set_scale(sprite_aspect*70.f);
+    .pos((vec2)VIEWPORT*.5f)
+    .scale(sprite_aspect*70.f);
 
   float sp = 500.f*DT;
   _player = stage::player{stage::player::args{
@@ -243,13 +243,13 @@ void context::render(double dt, [[maybe_unused]] double alpha) {
   _viewport.draw(render::win_proj());
   ntf::transform2d text_transform;
   text_transform
-    .set_pos(30.f, 100.f)
-    .set_scale(.75f);
+    .pos(30.f, 100.f)
+    .scale(.75f);
   std::string txt = fmt::format("danmaku: {}", _projs.size());
   render::draw_text(txt, color4{1.f}, text_transform.mat());
   auto cpos = _player.transform.pos();
   txt = fmt::format("cino pos: {} {}", cpos.x, cpos.y);
-  text_transform.set_pos(30.f, 140.f);
+  text_transform.pos(30.f, 140.f);
   render::draw_text(txt, color4{1.f}, text_transform.mat());
 
 
@@ -265,8 +265,8 @@ projectile_view::projectile_view(std::list<stage::projectile>& list, std::size_t
 
   ntf::transform2d transform;
   transform
-    .set_pos((vec2)VIEWPORT*.5f)
-    .set_scale(aspect*20.f);
+    .pos((vec2)VIEWPORT*.5f)
+    .scale(aspect*20.f);
 
   for (size_t i = 0; i < size; ++i) {
     new_list.emplace_back(stage::projectile::args{

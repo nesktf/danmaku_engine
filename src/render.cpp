@@ -121,7 +121,7 @@ void draw_frontend(double dt) {
 
     ntf::transform2d font_transform;
     const vec2 pos {100.0f,i*50.0f + 200.0f};
-    font_transform.set_pos(pos);
+    font_transform.pos(pos);
 
     const auto shader_sampler = 0;
 
@@ -180,7 +180,7 @@ void ui_renderer::init(ivec2 win_size, res::shader shader) {
   _shader->uniform_location(_time_u, "time");
   _shader->uniform_location(_sampler_u, "tex");
 
-  _ui_root.set_pos((vec2)win_size*.5f).set_scale(win_size);
+  _ui_root.pos((vec2)win_size*.5f).scale(win_size);
 }
 
 void ui_renderer::tick(double dt) {
@@ -237,12 +237,12 @@ void stage_viewport::update_viewport(ivec2 vp_size, ivec2 center) {
   _cam_center = center;
   _viewport = renderer::framebuffer{vp_size};
   _proj = glm::ortho(0.f, (float)vp_size.x, (float)vp_size.y, 0.f, -10.f, 1.f);
-  _view = ntf::view2d((vec2)_viewport.size()*.5f, _cam_center, vec2{1.f}, 0.f);
-  _transform.set_scale((vec2)vp_size);
+  _view = ntf::camera2d::build_view((vec2)_viewport.size()*.5f, _cam_center, vec2{1.f}, 0.f);
+  _transform.scale((vec2)vp_size);
 }
 
 void stage_viewport::update_pos(vec2 pos) {
-  _transform.set_pos(pos);
+  _transform.pos(pos);
 }
 
 } // namespace render

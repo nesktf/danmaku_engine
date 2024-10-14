@@ -15,13 +15,13 @@ static void close_game(frontend::menu_entry&) {
 
 static frontend::menu _build_package_view() {
   ntf::transform2d t;
-  t.set_pos((vec2)VIEWPORT*0.5f).set_scale(50.0f);
+  t.pos((vec2)VIEWPORT*0.5f).scale(50.0f);
 
   frontend::menu menu {
     .entries = {},
     .on_tick = [](frontend::menu& m){
       auto& t = m.back_transform;
-      t.set_rot(t.rot() + M_PIf*DT);
+      t.rot(t.rot() + M_PIf*DT);
     },
     .background = {1, 2},
     .back_transform = std::move(t),
@@ -43,7 +43,7 @@ static frontend::menu _build_package_view() {
 
 static frontend::menu _build_settings() {
   ntf::transform2d t;
-  t.set_pos((vec2)VIEWPORT*0.5f).set_scale(50.0f);
+  t.pos((vec2)VIEWPORT*0.5f).scale(50.0f);
   return frontend::menu {
     .entries = {
       {.text = "nothing1", .on_click = [](auto&){}},
@@ -54,7 +54,7 @@ static frontend::menu _build_settings() {
     },
     .on_tick = [](frontend::menu& m){
       auto& t = m.back_transform;
-      t.set_rot(t.rot() + M_PIf*DT);
+      t.rot(t.rot() + M_PIf*DT);
     },
     .background = {2, 2},
     .back_transform = std::move(t),
@@ -63,7 +63,7 @@ static frontend::menu _build_settings() {
 
 static frontend::menu _build_main_menu() {
   ntf::transform2d t;
-  t.set_pos((vec2)VIEWPORT*0.5f).set_scale(50.0f);
+  t.pos((vec2)VIEWPORT*0.5f).scale(50.0f);
   return frontend::menu {
     .entries = {
       {.text = "start", .on_click = [](auto&){frontend::instance().push(_build_package_view());}},
@@ -72,7 +72,7 @@ static frontend::menu _build_main_menu() {
     },
     .on_tick = [](frontend::menu& m){
       auto& t = m.back_transform;
-      t.set_rot(t.rot() + M_PIf*DT);
+      t.rot(t.rot() + M_PIf*DT);
     },
     .background = {2, 1},
     .back_transform = std::move(t),
