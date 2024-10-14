@@ -69,6 +69,7 @@ void request_font(std::string name, std::string path);
 void request_atlas(std::string name, std::string path);
 
 void start_loading(std::function<void()> callback);
+bool has_requests();
 void do_requests();
 
 std::optional<shader> get_shader(std::string_view name);

@@ -1,6 +1,8 @@
 #define SOL_ALL_SAFETIES_ON 1
 #include <sol/sol.hpp>
 
+#include "package/lua_state.hpp"
+
 #include "stage/stage.hpp"
 
 #include "resources.hpp"
@@ -8,20 +10,125 @@
 
 #include <shogle/core/allocator.hpp>
 
-namespace {
+namespace stage {
 
-static stage::entity_movement move_make_linear(sol::table tbl) {
-  cmplx vel = cmplx{tbl.get<float>("real"), tbl.get<float>("imag")};
-  return stage::entity_movement_linear(vel);
+context::context(std::string_view script_path) {
+  auto fb_shader = res::get_shader("framebuffer").value();
+  _viewport.init(VIEWPORT, VIEWPORT/2, (vec2)render::win_size()*.5f, fb_shader);
+  _vp_sub = render::vp_subscribe([this](std::size_t w, std::size_t h) {
+    _viewport.update_pos(vec2{w, h}*.5f);
+  });
+
+  auto stlib = package::stlib_open(_lua);
+  _lua_post_open(stlib);
+  _prepare_player();
+  _lua.script_file(script_path.data());
+
+  if (stlib["init"].is<sol::function>()) {
+    stlib["init"].get<sol::function>()();
+  } else {
+    logger::warning("[stage::context] {}.init() not defined", stlib_key);
+  }
+
+  if (res::has_requests()) {
+    res::start_loading([this]() {
+      start();
+    });
+  } else {
+    start();
+  }
 }
 
-static auto funny_lib(sol::this_state s) -> sol::table {
-  sol::state_view lua{s};
-  sol::table module = lua.create_table();
+context::~context() noexcept {
+  render::vp_unsuscribe(_vp_sub);
+  _viewport.destroy();
+}
+
+void context::start() {
+  NTF_ASSERT(_state == context::state::loading);
+
+  auto stlib = _lua[stlib_key.data()].get<sol::table>();
+
+  if (!stlib["main"].is<sol::function>()) {
+    throw ntf::error{"[stage::context] {}.main() not defined", stlib_key};
+  }
+  auto main_task = stlib["main"].get<sol::function>();
+  _task_thread = sol::thread::create(_lua.lua_state());
+  _task = sol::coroutine{_task_thread.state(), main_task};
+
+  _on_render = stlib["draw"].get<sol::protected_function>();
+  _on_tick = stlib["update"].get<sol::protected_function>();
+
+  _state = context::state::main;
+}
+
+void context::_lua_post_open(sol::table stlib) {
+  auto module = stlib["stage"].get_or_create<sol::table>();
+
+  module.set_function("spawn_boss", [this](float scale, cmplx p0, cmplx p1) {
+    const auto atlas = res::get_atlas("effects").value();
+    const auto entry = atlas->group_at(atlas->find_group("ball_solid").value())[0];
+    const auto aspect = atlas->at(entry).aspect();
+
+    ntf::transform2d transform;
+    transform
+      .set_pos(p0)
+      .set_scale(scale*aspect);
+
+    _boss = stage::boss{stage::boss::args{
+      .transform = transform,
+      .movement = stage::entity_movement_towards(p1, DT*cmplx{10.f,10.f}, cmplx{DT}, .8f),
+      .animator = stage::entity_animator_static(atlas, entry),
+    }};
+  });
+
+  module.set_function("move_boss", [this](cmplx pos) {
+    _boss.movement = stage::entity_movement_towards(pos, DT*cmplx{10.f,10.f}, cmplx{DT}, .8f);
+  });
+
+  module.set_function("boss_pos", [this]() -> cmplx {
+    return _boss.transform.cpos();
+  });
+  
+  module.set_function("player_pos", [this]() -> cmplx {
+    return _player.transform.cpos();
+  });
+
+  module.set_function("spawn_danmaku", [this](cmplx dir, float speed, cmplx pos) {
+    const auto atlas = res::get_atlas("effects").value();
+    const auto entry = atlas->group_at(atlas->find_group("star_med").value())[3];
+    const auto aspect = atlas->at(entry).aspect();
+
+    ntf::transform2d transform;
+    transform
+      .set_pos(pos)
+      .set_scale(aspect*20.f);
+
+    _projs.emplace_back(stage::projectile::args {
+      .transform = transform,
+      .movement = stage::entity_movement_linear(dir*speed),
+      .animator = stage::entity_animator_static(atlas, entry),
+      .angular_speed = 2*M_PIf*DT,
+    });
+  });
+
+
+  module.set_function("viewport", [this]() -> sol::table {
+    return _lua.create_table_with("x", VIEWPORT.x, "y", VIEWPORT.y);
+  });
+
+  module.set_function("cowait", sol::yielding([this](frame_delay time) {
+    _task_wait = time;
+    logger::debug("[stage::context] Task yield {} frames", time);
+  }));
+
 
   auto move_type = module.new_usertype<stage::entity_movement>(
     "move", sol::no_constructor,
-    "make_linear", &move_make_linear
+    "make_linear", +[](sol::table tbl) -> stage::entity_movement {
+      cmplx vel = cmplx{tbl.get<float>("real"), tbl.get<float>("imag")};
+      return stage::entity_movement_linear(vel);
+    }
   );
 
   auto proj_type = module.new_usertype<stage::projectile>(
@@ -31,54 +138,12 @@ static auto funny_lib(sol::this_state s) -> sol::table {
   );
 
   auto view_type = module.new_usertype<stage::projectile_view>(
-    "pview", sol::call_constructor, sol::constructors<stage::projectile_view(std::size_t)>{},
+    "pview", sol::no_constructor,
+    "make", [this](std::size_t size) { return projectile_view{_projs, size}; },
+    // "pview", sol::call_constructor, sol::constructors<stage::projectile_view(std::size_t)>{},
     "size", &stage::projectile_view::size,
     "for_each", &stage::projectile_view::for_each
   );
-
-  return module;
-};
-
-stage::context* _curr_ctx;
-
-} // namespace
-
-
-namespace stage {
-
-context::context(std::string_view stage_script) {
-  auto fb_shader = res::get_shader("framebuffer").value();
-  _viewport.init(VIEWPORT, VIEWPORT/2, (vec2)render::win_size()*.5f, fb_shader);
-  _vp_sub = render::vp_subscribe([this](std::size_t w, std::size_t h) {
-    _viewport.update_pos(vec2{w, h}*.5f);
-  });
-
-  _curr_ctx = this;
-
-  _prepare_player();
-
-  _prepare_lua_env();
-
-  _lua.script_file(stage_script.data());
-
-  ntf::log::debug("D");
-  auto init_task = _lua.get<sol::protected_function>("__INIT_TASK");
-  if (init_task) {
-    init_task();
-  } else {
-    ntf::log::warning("[stage::context] Lua initial task not defined in script {}", stage_script);
-  }
-
-  _entrypoint = _lua.get<sol::protected_function>("__MAIN_TASK");
-  if (!_entrypoint) {
-    throw ntf::error{"[stage::context] Lua main task not defined in script {}", 
-      std::string{stage_script}};
-  }
-}
-
-context::~context() noexcept {
-  render::vp_unsuscribe(_vp_sub);
-  _viewport.destroy();
 }
 
 void context::_prepare_player() {
@@ -111,113 +176,20 @@ void context::_prepare_player() {
   }};
 }
 
-void context::_prepare_lua_env() {
-  _lua.open_libraries(
-    sol::lib::base, sol::lib::coroutine,
-    sol::lib::package, sol::lib::table,
-    sol::lib::math, sol::lib::string
-  );
-
-  _lua["__GLOBAL"] = _lua.create_table_with(
-    "dt", DT,
-    "ups", UPS,
-    "ticks", 0
-  );
-  _lua["package"]["path"] = ";res/script/?.lua";
-
-  // Log functions
-  _lua.set_function("__LOG_ERROR", [](std::string msg) { ntf::log::error("{}", msg); });
-  _lua.set_function("__LOG_WARNING", [](std::string msg) { ntf::log::warning("{}", msg); });
-  _lua.set_function("__LOG_DEBUG", [](std::string msg) { ntf::log::debug("{}", msg); });
-  _lua.set_function("__LOG_INFO", [](std::string msg) { ntf::log::info("{}", msg); });
-  _lua.set_function("__LOG_VERBOSE", [](std::string msg) { ntf::log::verbose("{}", msg); });
-
-  // Boss functions
-  _lua.set_function("__SPAWN_BOSS", [this](float scale, float, sol::table p0, sol::table p1) {
-    const auto atlas = res::get_atlas("effects").value();
-    const auto entry = atlas->group_at(atlas->find_group("ball_solid").value())[0];
-    const auto aspect = atlas->at(entry).aspect();
-
-    cmplx first = cmplx{p0.get<float>("real"), p0.get<float>("imag")};
-    cmplx last = cmplx{p1.get<float>("real"), p1.get<float>("imag")};
-
-    ntf::transform2d transform;
-    transform
-      .set_pos(first)
-      .set_scale(scale*aspect);
-
-    _boss = stage::boss{stage::boss::args{
-      .transform = transform,
-      .movement = stage::entity_movement_towards(last, DT*cmplx{10.f,10.f}, cmplx{DT}, .8f),
-      .animator = stage::entity_animator_static(atlas, entry),
-    }};
-  });
-
-  _lua.set_function("__MOVE_BOSS", [this](sol::table pos) {
-    cmplx new_pos = cmplx{pos.get<float>("real"), pos.get<float>("imag")};
-    _boss.movement = stage::entity_movement_towards(new_pos, DT*cmplx{10.f,10.f}, cmplx{DT}, .8f);
-  });
-
-  _lua.set_function("__BOSS_POS", [this]() -> sol::table {
-    const auto pos = _boss.transform.pos();
-    return _lua.create_table_with("real", pos.x, "imag", pos.y);
-  });
-  
-  // Player functions
-  _lua.set_function("__PLAYER_POS", [this]() -> sol::table {
-    const auto pos = _player.transform.pos();
-    return _lua.create_table_with("x", pos.x, "y", pos.y);
-  });
-
-  // Projectile functions
-  _lua.set_function("__SPAWN_DANMAKU", [this](sol::table dir, float speed, sol::table pos) {
-    cmplx proj_dir = cmplx{dir.get<float>("real"), dir.get<float>("imag")};
-    cmplx proj_pos = cmplx{pos.get<float>("real"), pos.get<float>("imag")};
-
-    const auto atlas = res::get_atlas("effects").value();
-    const auto entry = atlas->group_at(atlas->find_group("star_med").value())[3];
-    const auto aspect = atlas->at(entry).aspect();
-
-    ntf::transform2d transform;
-    transform
-      .set_pos(proj_pos)
-      .set_scale(aspect*20.f);
-
-    _projs.emplace_back(stage::projectile::args {
-      .transform = transform,
-      .movement = stage::entity_movement_linear(proj_dir*speed),
-      .animator = stage::entity_animator_static(atlas, entry),
-      .angular_speed = 2*M_PIf*DT,
-    });
-  });
-
-  // Misc
-  _lua.set_function("__STAGE_TICKS", [this]() -> frames { return _tick_count; });
-  _lua.set_function("__VIEWPORT", [this]() -> sol::table {
-    return _lua.create_table_with("x", VIEWPORT.x, "y", VIEWPORT.y);
-  });
-
-
-  _lua.require("funny_lib", sol::c_call<decltype(&funny_lib), &funny_lib>);
-}
-
 void context::tick() {
-  // auto& lua = _lua;
-  // sol::function on_tick = lua["__ON_TICK"];
-  // on_tick();
+  if (_state != context::state::main) {
+    return;
+  }
 
   if (_task_time >= _task_wait) {
     _task_time = 0;
-
-    sol::table task_yield = _entrypoint();
-    const auto delay = task_yield.get<frame_delay>("wait_time");
-    if (delay < 0) {
-      ntf::log::debug("[stage] Lua main task returned");
-    } else {
-      _task_wait = delay;
-    }
+    _task();
   }
   ++_task_time;
+
+  if (_on_tick) {
+    _on_tick();
+  }
 
   for (auto& proj : _projs) {
     proj.tick();
@@ -244,8 +216,16 @@ void context::tick() {
 }
 
 void context::render(double dt, [[maybe_unused]] double alpha) {
-  _viewport.bind(render::win_size(), [this]() {
+  if (_state != context::state::main) {
+    return;
+  }
+
+  _viewport.bind(render::win_size(), [this, dt, alpha]() {
     render::clear_viewport();
+
+    if (_on_render) {
+      _on_render(dt, alpha);
+    }
 
     auto& boss = _boss;
     if (!boss.hide) {
@@ -276,8 +256,9 @@ void context::render(double dt, [[maybe_unused]] double alpha) {
   ++_frame_count;
 }
 
-projectile_view::projectile_view(std::size_t size) : _size(size) {
-  std::list<stage::projectile> list;
+projectile_view::projectile_view(std::list<stage::projectile>& list, std::size_t size) :
+  _size(size) {
+  std::list<stage::projectile> new_list;
   const auto atlas = res::get_atlas("effects").value();
   const auto entry = atlas->group_at(atlas->find_group("star_med").value())[1];
   const auto aspect = atlas->at(entry).aspect();
@@ -288,15 +269,15 @@ projectile_view::projectile_view(std::size_t size) : _size(size) {
     .set_scale(aspect*20.f);
 
   for (size_t i = 0; i < size; ++i) {
-    list.emplace_back(stage::projectile::args{
+    new_list.emplace_back(stage::projectile::args{
       .transform = transform,
       .movement = stage::entity_movement_linear(cmplx{0.f}),
       .animator = stage::entity_animator_static(atlas, entry),
       .clean_flag = false,
     });
   }
-  _begin = list.begin();
-  _curr_ctx->projs().splice(_curr_ctx->projs().end(), list);
+  _begin = new_list.begin();
+  list.splice(list.end(), new_list);
 }
 
 void projectile_view::for_each(sol::function f) {

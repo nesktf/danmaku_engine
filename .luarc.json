@@ -1,6 +1,6 @@
 {
+  "diagnostics.globals": [ "okuu" ],
   "diagnostics.disable": [
-  "undefined-global",
     "trailing-space"
   ]
 }

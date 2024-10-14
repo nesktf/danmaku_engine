@@ -1,7 +1,7 @@
 #include "ui/frontend.hpp"
 
 #include "global.hpp"
-#include "script/package.hpp"
+#include "package/package.hpp"
 
 #include <shogle/engine.hpp>
 
@@ -26,7 +26,7 @@ static frontend::menu _build_package_view() {
     .background = {1, 2},
     .back_transform = std::move(t),
   };
-  auto packages = script::package::parse_packages();
+  auto packages = package::parse();
   if (packages.empty()) {
     menu.entries = {
       {.text = "go back", .on_click = [](auto&){frontend::instance().pop();}}

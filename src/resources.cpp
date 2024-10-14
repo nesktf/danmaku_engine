@@ -98,6 +98,11 @@ void do_requests() {
   _res.loader.do_requests();
 }
 
+bool has_requests() {
+  return _res.atlas_req.size() > 0 || _res.font_req.size() > 0 ||
+         _res.texture_req.size() > 0 || _res.shader_req.size() > 0;
+}
+
 void start_loading(std::function<void()> callback) {
   size_t res_total = _res.shader_req.size() + _res.font_req.size() +
                      _res.atlas_req.size() + _res.texture_req.size();
