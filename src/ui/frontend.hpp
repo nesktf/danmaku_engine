@@ -1,6 +1,6 @@
 #pragma once
 
-#include "global.hpp"
+#include "okuu.hpp"
 #include "resources.hpp"
 
 #include <shogle/scene/transform.hpp>
@@ -31,7 +31,7 @@ public:
   public:
     std::vector<menu_entry> entries;
     void (*on_tick)(menu&);
-    res::sprite background;
+    okuu::res::sprite background;
     ntf::transform2d back_transform{};
     menu_index focused{0};
   };

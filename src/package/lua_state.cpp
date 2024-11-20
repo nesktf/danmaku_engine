@@ -1,6 +1,8 @@
 #include "package/lua_state.hpp"
 #include "resources.hpp"
 
+#include <shogle/scene/transform.hpp>
+
 namespace {
 
 void stlib_log(sol::table& module) {
@@ -14,17 +16,17 @@ void stlib_log(sol::table& module) {
 void stlib_math(sol::table& module) {
   auto cmplx_type = module.new_usertype<cmplx>(
     "cmplx", sol::call_constructor,
-    sol::constructors<cmplx(), cmplx(float), cmplx(float, float)>{},
+    sol::constructors<cmplx(), cmplx(real), cmplx(real, real)>{},
     "real", sol::property(
-      +[](cmplx& c, float f) { c.real(f); },
-      +[](cmplx& c) -> float { return c.real(); }
+      +[](cmplx& c, real f) { c.real(f); },
+      +[](cmplx& c) -> real { return c.real(); }
     ),
     "imag", sol::property(
-      +[](cmplx& c, float f) { c.imag(f); },
-      +[](cmplx& c) -> float { return c.imag(); }
+      +[](cmplx& c, real f) { c.imag(f); },
+      +[](cmplx& c) -> real { return c.imag(); }
     ),
     "expi", &ntf::expic,
-    "polar", &std::polar<float>,
+    "polar", &std::polar<real>,
 
     sol::meta_function::addition,
       sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator+),
@@ -32,13 +34,53 @@ void stlib_math(sol::table& module) {
       sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator-),
     sol::meta_function::multiplication, sol::overload(
       sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator*),
-      sol::resolve<cmplx(const cmplx&, const float&)>(&std::operator*),
-      sol::resolve<cmplx(const float&, const cmplx&)>(&std::operator*)
+      sol::resolve<cmplx(const cmplx&, const real&)>(&std::operator*),
+      sol::resolve<cmplx(const real&, const cmplx&)>(&std::operator*)
     ),
     sol::meta_function::division, sol::overload(
       sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator/),
-      sol::resolve<cmplx(const cmplx&, const float&)>(&std::operator/),
-      sol::resolve<cmplx(const float&, const cmplx&)>(&std::operator/)
+      sol::resolve<cmplx(const cmplx&, const real&)>(&std::operator/),
+      sol::resolve<cmplx(const real&, const cmplx&)>(&std::operator/)
+    )
+  );
+
+  auto vec3_type = module.new_usertype<vec3>(
+    "vec3", sol::call_constructor,
+    sol::constructors<vec3(), vec3(real, real, real)>{},
+    "x", &vec3::x,
+    "y", &vec3::y,
+    "z", &vec3::z,
+    
+    sol::meta_function::addition,
+      sol::resolve<vec3(const vec3&, const vec3&)>(&glm::operator+),
+    sol::meta_function::subtraction,
+      sol::resolve<vec3(const vec3&, const vec3&)>(&glm::operator-),
+    sol::meta_function::multiplication, sol::overload(
+      sol::resolve<vec3(const vec3&, const vec3&)>(&glm::operator*),
+      sol::resolve<vec3(real, const vec3&)>(&glm::operator*),
+      sol::resolve<vec3(const vec3&, real)>(&glm::operator*)
+    ),
+    sol::meta_function::division, sol::overload(
+      sol::resolve<vec3(const vec3&, const vec3&)>(&glm::operator/),
+      sol::resolve<vec3(real, const vec3&)>(&glm::operator/),
+      sol::resolve<vec3(const vec3&, real)>(&glm::operator/)
+    )
+  );
+
+  auto transf2d_type = module.new_usertype<ntf::transform2d>(
+    "transform2d", sol::call_constructor,
+    sol::constructors<ntf::transform2d()>{},
+    "pos", sol::property(
+      +[](ntf::transform2d& t, cmplx pos) { t.pos(pos); },
+      +[](ntf::transform2d&t ) -> cmplx { return t.cpos(); }
+    ),
+    "scale", sol::property(
+      +[](ntf::transform2d& t, cmplx scale) { t.scale(scale); },
+      +[](ntf::transform2d& t) -> cmplx { return t.cscale(); }
+    ),
+    "rot", sol::property(
+      +[](ntf::transform2d& t, real rot) { t.rot(rot); },
+      +[](ntf::transform2d& t) -> real { return t.rot(); }
     )
   );
 }

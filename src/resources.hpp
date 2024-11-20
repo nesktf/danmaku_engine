@@ -1,98 +1,162 @@
 #pragma once
 
-#include "global.hpp"
+#include "okuu.hpp"
 
-#include <shogle/render/gl/shader.hpp>
-#include <shogle/render/gl/font.hpp>
-#include <shogle/render/gl/texture.hpp>
+namespace okuu {
 
-#include <shogle/assets/pool.hpp>
-#include <shogle/assets/font.hpp>
-#include <shogle/assets/atlas.hpp>
+using uniform = okuu::renderer::uniform;
+using texture = okuu::renderer::texture2d;
+using shader = okuu::renderer::program;
+using font = okuu::renderer::font;
+using framebuffer = okuu::renderer::framebuffer;
 
-namespace res {
+using atlas = ntf::texture_atlas<okuu::texture>;
+using atlas_texture = ntf::atlas_texture;
+using atlas_sequence = ntf::atlas_sequence;
+using atlas_group = ntf::atlas_group;
 
-using pool_handle = ntf::resource_handle;
+using resource_handle = ntf::resource_handle;
+using texture_data = ntf::texture_data<okuu::texture>;
+using font_data = ntf::font_data<okuu::font>;
+using atlas_data = okuu::atlas::data_type;
 
-using texture_type = renderer::texture2d;
-using texture_data = ntf::texture_data<texture_type>;
+struct shader_data {
+  struct loader {
+    okuu::shader operator()(shader_data data);
+    okuu::shader operator()(std::string vert, std::string frag);
+  };
 
-using shader_type = renderer::shader_program;
+  shader_data(std::string vert_, std::string frag_) :
+    vert(std::move(vert_)), frag(std::move(frag_)) {}
 
-using font_type = renderer::font;
-using font_data = ntf::font_data<font_type>;
-
-using atlas_type = ntf::texture_atlas<texture_type>;
-using atlas_data = atlas_type::data_type;
-
-
-template<typename Resource, typename Getter>
-class handle_wrapper {
-public:
-  handle_wrapper() = default;
-
-  handle_wrapper(pool_handle id) :
-    _id(id) {}
-
-public:
-  pool_handle id() const { return _id; }
-
-  const Resource& get() const { return Getter{}(_id); }
-  const Resource* operator->() const { return &get(); }
-  const Resource& operator*() const { return get(); }
-  operator const Resource&() const { return get(); }
-
-private:
-  pool_handle _id{0};
+  std::string vert, frag;
 };
 
-struct shader_getter { const shader_type& operator()(pool_handle id); };
-struct font_getter { const font_type& operator()(pool_handle id); };
-struct atlas_getter { const atlas_type& operator()(pool_handle id); };
-struct texture_getter { const texture_type& operator()(pool_handle id); };
+class resource_manager;
 
-using shader = handle_wrapper<shader_type, shader_getter>;
-using font = handle_wrapper<font_type, font_getter>;
-using atlas = handle_wrapper<atlas_type, atlas_getter>;
-using texture = handle_wrapper<texture_type, texture_getter>;
+template<typename T>
+class resource {
+public:
+  resource() = default;
 
-using sprite_animator = ntf::texture_animator<texture_type, atlas>;
+private:
+  resource(okuu::resource_manager& manager, okuu::resource_handle id) :
+    _manager(&manager), _id(id) {}
 
-using sprite = std::pair<atlas, atlas_type::texture_handle>;
+public:
+  T& get();
+  T* operator->() { return &get(); }
+  T& operator*() { return get(); }
 
-void init(std::function<void()> callback);
-void destroy();
+  const T& get() const;
+  const T* operator->() const { return &get(); }
+  const T& operator*() const { return get(); }
 
-void request_shader(std::string name, std::string vert_path, std::string frag_path);
-void request_texture(std::string name, std::string path);
-void request_font(std::string name, std::string path);
-void request_atlas(std::string name, std::string path);
+  bool valid() const { return _id != ntf::resource_tombstone && _manager != nullptr; }
+  explicit operator bool() const { return valid(); }
 
-void start_loading(std::function<void()> callback);
-bool has_requests();
-void do_requests();
+private:
+  okuu::resource_manager* _manager{nullptr};
+  okuu::resource_handle _id{ntf::resource_tombstone};
 
-std::optional<shader> get_shader(std::string_view name);
-std::optional<font> get_font(std::string_view name);
-std::optional<atlas> get_atlas(std::string_view name);
-std::optional<atlas_type::sequence_handle> get_atlas_sequence(std::string_view atlas, std::string_view seq);
-std::optional<atlas_type::sequence_handle> get_atlas_sequence(atlas handle, std::string_view seq);
-std::optional<texture> get_texture(std::string_view name);
+private:
+  friend class resource_manager;
+};
 
-// sprite sprite_from_index(atlas handle, atlas_type::texture_handle index);
-// sprite sprite_from_index(std::string_view atlas, atlas_type::texture_handle index);
-//
-// sprite sprite_from_group(atlas handle, atlas_type::group_handle group, atlas_type::texture_handle index);
-// sprite sprite_from_group(atlas handle, std::string_view group, atlas_type::texture_handle index);
-// sprite sprite_from_group(std::string_view atlas, std::string_view group, atlas_type::texture_handle index);
-//
-// sprite sprite_from_sequence(atlas handle, atlas_type::sequence_handle seq);
-// sprite sprite_from_sequence(atlas handle, std::string_view seq);
-// sprite sprite_from_sequence(std::string_view atlas, std::string_view seq);
+using sprite = std::pair<resource<okuu::atlas>, okuu::atlas_texture>;
+using sprite_sequence = std::pair<okuu::resource<okuu::atlas>, okuu::atlas_sequence>;
+using sprite_group = std::pair<okuu::resource<okuu::atlas>, okuu::atlas_group>;
 
-void free(shader shader);
-void free(font font);
-void free(atlas atlas);
-void free(texture texture);
+using sprite_animator = ntf::texture_animator<okuu::texture, okuu::resource<okuu::atlas>>;
 
-} // namespace res
+template<typename... Ts>
+using request_vec = std::vector<std::tuple<Ts...>>;
+
+class resource_manager {
+private:
+  resource_manager() = default;
+
+public:
+  void load_defaults();
+  void init_requests(ntf::async_data_loader& loader, std::function<void()> callback);
+
+  void request_shader(std::string name, std::string vert_path, std::string frag_path);
+  void request_font(std::string name, std::string path);
+  void request_atlas(std::string name, std::string path);
+  void request_texture(std::string name, std::string path);
+
+  void emplace_shader(std::string name, okuu::shader shader);
+  void emplace_font(std::string name, okuu::font font);
+  void emplace_atlas(std::string name, okuu::atlas atlas);
+  void emplace_texture(std::string name, okuu::texture texture);
+
+  void free(okuu::resource<okuu::font> font);
+  void free(okuu::resource<okuu::shader> shader);
+  void free(okuu::resource<okuu::texture> texture);
+  void free(okuu::resource<okuu::atlas> atlas);
+
+  okuu::resource<okuu::font> font_at(std::string_view name) const;
+  okuu::resource<okuu::shader> shader_at(std::string_view name) const;
+  okuu::resource<okuu::texture> texture_at(std::string_view name) const;
+  okuu::resource<okuu::atlas> atlas_at(std::string_view name) const;
+  okuu::sprite_sequence sequence_at(std::string_view atlas, std::string_view seq) const;
+  okuu::sprite_group group_at(std::string_view atlas, std::string_view grp) const;
+
+  void clear();
+
+public:
+  std::size_t shader_count() const { return _shaders.size(); }
+  std::size_t texture_count() const { return _textures.size(); }
+  std::size_t font_count() const { return _fonts.size(); }
+  std::size_t atlas_count() const { return _atlas.size(); }
+
+  template<typename T>
+  T& at(okuu::resource_handle) { NTF_ASSERT(false, "Invalid resource type"); }
+
+  template<>
+  okuu::font& at<okuu::font>(okuu::resource_handle id) { return _fonts.at(id); }
+
+  template<>
+  okuu::shader& at<okuu::shader>(okuu::resource_handle id) { return _shaders.at(id); }
+
+  template<>
+  okuu::atlas& at<okuu::atlas>(okuu::resource_handle id) { return _atlas.at(id); }
+
+  template<>
+  okuu::texture& at<okuu::texture>(okuu::resource_handle id) { return _textures.at(id); }
+
+private:
+  void _clear_req();
+
+private:
+  okuu::request_vec<std::string, std::string, std::string> _shader_req;
+  okuu::request_vec<std::string, std::string> _texture_req;
+  okuu::request_vec<std::string, std::string> _font_req;
+  okuu::request_vec<std::string, std::string> _atlas_req;
+
+  ntf::resource_pool<okuu::shader, okuu::shader_data> _shaders;
+  ntf::resource_pool<okuu::texture, okuu::texture_data> _textures;
+  ntf::resource_pool<okuu::font, okuu::font_data> _fonts;
+  ntf::resource_pool<okuu::atlas, okuu::atlas_data> _atlas;
+
+  std::size_t _async_count{0};
+
+private:
+  friend class okuu::context;
+};
+
+okuu::texture default_texture();
+
+template<typename T>
+T& resource<T>::get() {
+  NTF_ASSERT(valid(), "Invalid resource");
+  return _manager->at<T>(_id);
+}
+
+template<typename T>
+const T& resource<T>::get() const {
+  NTF_ASSERT(valid(), "Invalid resource");
+  return _manager->at<T>(_id);
+}
+
+} // namespace okuu

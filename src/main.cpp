@@ -1,35 +1,97 @@
-#include "render.hpp"
-#include "global.hpp"
-#include "resources.hpp"
-#include "input.hpp"
+#include "context.hpp"
 
-#include "ui/frontend.hpp"
+namespace okuu {
 
-#include "stage/stage.hpp"
+okuu::context* global_ctx;
 
+context::context(window_type* window) : _window(window) {
+  render::init(*_window);
+  _window->set_key_event([this](keycode code, auto, keystate state, auto) {
+    _handle_input(code, state);
+  });
 
-static std::unique_ptr<stage::context> stage_ctx;
+  _resources.load_defaults();
 
-namespace global {
+  _resources.request_shader("sprite",
+                            "res/shader/sprite.vs.glsl", "res/shader/sprite.fs.glsl");
+  _resources.request_shader("font",
+                            "res/shader/font.vs.glsl", "res/shader/font.fs.glsl");
+  _resources.request_shader("framebuffer",
+                            "res/shader/framebuffer.vs.glsl", "res/shader/framebuffer.fs.glsl");
+  _resources.request_shader("frontend",
+                            "res/shader/frontend.vs.glsl", "res/shader/frontend.fs.glsl");
 
-static global_state _state;
+  _resources.request_font("arial",
+                          "res/fonts/arial.ttf");
 
-void start_stage(std::string path) {
-  stage_ctx = std::make_unique<stage::context>(path);
-  _state.current_state = global::states::gameplay;
+  _resources.init_requests(_loader, [this]() {
+    render::post_init(*_window);
+    frontend::init();
+    _curr_scr = okuu::screen::frontend;
+  });
+  logger::debug("[okuu::context] Initialized");
 }
 
-void go_back() {
-  _state.current_state = global::states::frontend;
+context::~context() noexcept {
+  render::destroy();
+  logger::debug("[okuu:context] byebye!!");
 }
 
-global_state& state() { return _state; }
+void context::render(double dt, double alpha) {
+  render::clear_viewport();
+  switch(_curr_scr) {
+    case okuu::screen::frontend: {
+      render::draw_frontend(dt);
+      break;
+    }
+    case okuu::screen::gameplay: {
+      _stage->render(dt, alpha);
+      break;
+    }
+    default: break;
+  }
+  _elapsed_frames++;
+}
 
-} // namespace global
+void context::tick() {
+  _loader.do_requests();
+  switch (_curr_scr) {
+    case okuu::screen::frontend: {
+      frontend::tick();
+      break;
+    }
+    case okuu::screen::gameplay: {
+      _stage->tick();
+      break;
+    }
+    default: break;
+  }
+  _elapsed_ticks++;
+}
 
+void context::start_stage(std::string path) {
+  _stage = std::make_unique<stage::context>(path);
+  _curr_scr = okuu::screen::gameplay;
+}
+
+void context::unload_stage() {
+  _curr_scr = okuu::screen::frontend;
+}
+
+bool context::poll_key(keycode code, keystate state) const {
+  return _window->poll_key(code, state);
+}
+
+context& ctx() { return *global_ctx; }
+
+} // namespace okuu
 
 int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
-  ntf::log::set_level(ntf::log::level::verbose);
+#ifdef NDEBUG
+  logger::set_level(logger::level::info);
+#else
+  logger::set_level(logger::level::verbose);
+#endif
 
   auto glfw = glfw::init();
   glfw::set_swap_interval(0); // disable vsync
@@ -37,58 +99,15 @@ int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
   glfw::window<renderer> window{1280, 720, "test"};
   auto imgui = imgui::init(window, imgui::glfw_gl3_impl{});
 
-  // Common init
-  render::init(window);
-  input::init(window); // after global?
-  res::init([&](){
-    render::post_init(window);
-
-    // global init
-    frontend::init();
-    global::_state.current_state = global::states::frontend;
-  });
+  okuu::context ctx{&window};
+  okuu::global_ctx = &ctx;
 
   ntf::shogle_main_loop(window, UPS,
     [&](double dt, double alpha) {
-      auto& state = global::state();
       imgui.start_frame();
-
-      render::clear_viewport();
-      switch (state.current_state) {
-        case global::states::frontend: {
-          render::draw_frontend(dt);
-          break;
-        }
-        case global::states::gameplay: {
-          stage_ctx->render(dt, alpha);
-          break;
-        }
-        default: break;
-      }
-
+      ctx.render(dt, alpha);
       imgui.end_frame();
     },
-    [&]() {
-      auto& state = global::state();
-      state.elapsed_ticks++;
-      res::do_requests();
-
-      switch(state.current_state) {
-        case global::states::gameplay: {
-          stage_ctx->tick();
-          break;
-        }
-        case global::states::frontend: {
-          frontend::tick();
-          break;
-        }
-        default: break;
-      }
-    }
+    [&]() { ctx.tick(); }
   );
-
-  stage_ctx.reset();
-  res::destroy();
-  render::destroy();
-  ntf::log::debug("[main] byebye!!");
 }

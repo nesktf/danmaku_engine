@@ -70,13 +70,8 @@ void context::_lua_post_open(sol::table stlib) {
     const auto entry = atlas->group_at(atlas->find_group("ball_solid").value())[0];
     const auto aspect = atlas->at(entry).aspect();
 
-    ntf::transform2d transform;
-    transform
-      .pos(p0)
-      .scale(scale*aspect);
-
     _boss = stage::boss{stage::boss::args{
-      .transform = transform,
+      .transform = ntf::transform2d{}.pos(p0).scale(scale*aspect),
       .movement = stage::entity_movement_towards(p1, DT*cmplx{10.f,10.f}, cmplx{DT}, .8f),
       .animator = stage::entity_animator_static(atlas, entry),
     }};
@@ -99,13 +94,8 @@ void context::_lua_post_open(sol::table stlib) {
     const auto entry = atlas->group_at(atlas->find_group("star_med").value())[3];
     const auto aspect = atlas->at(entry).aspect();
 
-    ntf::transform2d transform;
-    transform
-      .pos(pos)
-      .scale(aspect*20.f);
-
     _projs.emplace_back(stage::projectile::args {
-      .transform = transform,
+      .transform = ntf::transform2d{}.pos(pos).scale(aspect*20.f),
       .movement = stage::entity_movement_linear(dir*speed),
       .animator = stage::entity_animator_static(atlas, entry),
       .angular_speed = 2*M_PIf*DT,
@@ -161,14 +151,9 @@ void context::_prepare_player() {
   };
   const vec2 sprite_aspect = atlas->at(atlas->sequence_at(anim[0])[0]).aspect();
 
-  ntf::transform2d transform;
-  transform
-    .pos((vec2)VIEWPORT*.5f)
-    .scale(sprite_aspect*70.f);
-
   float sp = 500.f*DT;
   _player = stage::player{stage::player::args{
-    .transform = transform,
+    .transform = ntf::transform2d{}.pos((vec2)VIEWPORT*.5f).scale(sprite_aspect*70.f),
     .atlas = atlas,
     .anim = anim,
     .base_speed = sp,
@@ -241,8 +226,7 @@ void context::render(double dt, [[maybe_unused]] double alpha) {
   });
   render::draw_background(dt);
   _viewport.draw(render::win_proj());
-  ntf::transform2d text_transform;
-  text_transform
+  auto text_transform = ntf::transform2d{}
     .pos(30.f, 100.f)
     .scale(.75f);
   std::string txt = fmt::format("danmaku: {}", _projs.size());
@@ -263,14 +247,9 @@ projectile_view::projectile_view(std::list<stage::projectile>& list, std::size_t
   const auto entry = atlas->group_at(atlas->find_group("star_med").value())[1];
   const auto aspect = atlas->at(entry).aspect();
 
-  ntf::transform2d transform;
-  transform
-    .pos((vec2)VIEWPORT*.5f)
-    .scale(aspect*20.f);
-
   for (size_t i = 0; i < size; ++i) {
     new_list.emplace_back(stage::projectile::args{
-      .transform = transform,
+      .transform = ntf::transform2d{}.pos((vec2)VIEWPORT*.5f).scale(aspect*20.f),
       .movement = stage::entity_movement_linear(cmplx{0.f}),
       .animator = stage::entity_animator_static(atlas, entry),
       .clean_flag = false,

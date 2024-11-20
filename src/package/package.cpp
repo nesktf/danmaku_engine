@@ -11,7 +11,7 @@ std::vector<package> parse(std::string_view package_root) {
 
   fs::directory_iterator it;
   if (package_root.empty()) {
-    ntf::log::warning("[script::package] Using default package root for parsing");
+    ntf::logger::warning("[script::package] Using default package root for parsing");
     it = fs::directory_iterator{_default_root};
   } else {
     it = fs::directory_iterator{package_root};
@@ -30,7 +30,7 @@ std::vector<package> parse(std::string_view package_root) {
     packs.emplace_back(main.string());
   }
 
-  ntf::log::debug("[script::package] Found {} packages", packs.size());
+  ntf::logger::debug("[script::package] Found {} packages", packs.size());
   return packs;
 }
 

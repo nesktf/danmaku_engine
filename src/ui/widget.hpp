@@ -1,16 +1,14 @@
 #pragma once
 
-#include "core.hpp"
+#include "okuu.hpp"
 
-#include "render.hpp"
+namespace okuu::ui {
 
-#include <shogle/scene/transform.hpp>
-
-namespace ui {
+struct render_data {};
 
 class widget {
 public:
-  virtual void draw(const render::window_data&) = 0;
+  virtual void draw(render_data&) = 0;
   virtual void tick() {}
 
 protected:

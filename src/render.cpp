@@ -1,4 +1,3 @@
-#include "global.hpp"
 #include "render.hpp"
 #include "ui/frontend.hpp"
 
@@ -6,94 +5,33 @@
 
 #include <shogle/scene/camera.hpp>
 
-namespace {
 
-class sprite_renderer {
-public:
-  void init(res::shader shader);
+namespace okuu::render {
 
-  void draw(res::sprite sprite, const color4& color,
-            const mat4& model, const mat4& proj, const mat4& view) const;
-
-private:
-  res::shader _shader;
-  render::uniform _proj_u, _view_u, _model_u;
-  render::uniform _offset_u, _color_u, _sampler_u;
-};
-
-void sprite_renderer::init(res::shader shader) {
-  _shader = shader;
-
-  _shader->uniform_location(_proj_u, "proj");
-  _shader->uniform_location(_view_u, "view");
-  _shader->uniform_location(_model_u, "model");
-  _shader->uniform_location(_offset_u, "offset");
-  _shader->uniform_location(_color_u, "sprite_color");
-  _shader->uniform_location(_sampler_u, "sprite_sampler");
-}
-
-void sprite_renderer::draw(res::sprite sprite, const color4& color,
-                         const mat4& model, const mat4& proj, const mat4& view) const {
-  const auto [atlas, index] = sprite;
-  const auto sprite_sampler = 0;
-
-  _shader->use();
-  _shader->set_uniform(_proj_u, proj);
-  _shader->set_uniform(_view_u, view);
-  _shader->set_uniform(_model_u, model);
-  _shader->set_uniform(_offset_u, atlas->at(index).offset);
-  _shader->set_uniform(_color_u, color);
-
-  _shader->set_uniform(_sampler_u, (int)sprite_sampler);
-  atlas->texture().bind_sampler((size_t)sprite_sampler);
-
-  renderer::draw_quad();
-}
-
-struct {
-  render::ui_renderer ui;
-  // render::stage_viewport stage;
-  sprite_renderer sprite;
-
-  mat4 win_proj;
-  ivec2 win_size;
-
-  render::viewport_event vp_event;
-} r;
-
-} // namespace
-
-
-namespace render {
-
-void destroy() {
-  r.vp_event.clear();
-}
-
-void init(ntf::glfw::window<renderer>& window) {
-  // Load OpenGL and things
+context::context(window_type& window) : _window(window) {
   renderer::set_blending(true);
-
-  window.set_viewport_event([](size_t w, size_t h) {
-    renderer::set_viewport(w, h);
-    r.win_size = ivec2{w, h};
-    r.win_proj = glm::ortho(0.f, (float)w, (float)h, 0.f, -10.f, 1.f);
-
-    r.vp_event.fire(w, h);
-  });
 }
 
-void post_init(ntf::glfw::window<renderer>& win) {
-  // Prepare shaders and things
-  auto sprite_shader = res::get_shader("sprite");
-  auto front_shader = res::get_shader("frontend");
+context::~context() noexcept {
+}
 
-  auto vp = win.size();
+void context::_on_viewport_event(std::size_t w, std::size_t h) {
+  renderer::set_viewport(w, h);
+  // _cam2d.viewport(static_cast<float>(w), static_cast<float>(h));
+}
 
-  r.win_size = vp;
-  r.win_proj = glm::ortho(0.f, (float)vp.x, (float)vp.y, 0.f, -10.f, 1.f);
-  r.ui.init(vp, front_shader.value());
-  r.sprite.init(sprite_shader.value());
+void context::post_init(res::manager& res) {
+  auto size = _window.size();
+  // _cam2d
+  //   .viewport(static_cast<vec2>(size))
+  //   .zfar(1.f)
+  //   .znear(-10.f);
+
+  auto sprite_shader = res.shader_at("sprite");
+  auto front_shader = res.shader_at("frontend");
+
+  _ui.init(size, front_shader);
+  _sprite.init(sprite_shader);
 }
 
 void draw_background(double dt) {
@@ -243,6 +181,35 @@ void stage_viewport::update_viewport(ivec2 vp_size, ivec2 center) {
 
 void stage_viewport::update_pos(vec2 pos) {
   _transform.pos(pos);
+}
+
+void sprite_renderer::init(res::shader shader) {
+  _shader = shader;
+
+  _shader->uniform_location(_proj_u, "proj");
+  _shader->uniform_location(_view_u, "view");
+  _shader->uniform_location(_model_u, "model");
+  _shader->uniform_location(_offset_u, "offset");
+  _shader->uniform_location(_color_u, "sprite_color");
+  _shader->uniform_location(_sampler_u, "sprite_sampler");
+}
+
+void sprite_renderer::draw(res::sprite sprite, const color4& color,
+                         const mat4& model, const mat4& proj, const mat4& view) const {
+  const auto [atlas, index] = sprite;
+  const auto sprite_sampler = 0;
+
+  _shader->use();
+  _shader->set_uniform(_proj_u, proj);
+  _shader->set_uniform(_view_u, view);
+  _shader->set_uniform(_model_u, model);
+  _shader->set_uniform(_offset_u, atlas->at(index).offset);
+  _shader->set_uniform(_color_u, color);
+
+  _shader->set_uniform(_sampler_u, (int)sprite_sampler);
+  atlas->texture().bind_sampler((size_t)sprite_sampler);
+
+  renderer::draw_quad();
 }
 
 } // namespace render
