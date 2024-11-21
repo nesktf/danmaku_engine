@@ -45,6 +45,7 @@ const constexpr ivec2 WIN_SIZE {1280, 720};
 const constexpr ivec2 VIEWPORT {600, 700};
 // const constexpr ivec2 VIEWPORT = {880, 660};
 
+constexpr std::string_view shogle_ver = "shogle ver. " SHOGLE_VERSION_STRING;
 constexpr std::string_view stlib_key = "okuu";
 
 class context;
