@@ -1,15 +1,6 @@
 #pragma once
 
-#include <shogle/shogle.hpp>
-
-#include <shogle/scene/entity_pool.hpp>
-
-#include <shogle/stl/arena.hpp>
-#include <shogle/stl/event.hpp>
-
-#include <shogle/assets/pool.hpp>
-#include <shogle/assets/font.hpp>
-#include <shogle/assets/atlas.hpp>
+#include <shogle.hpp>
 
 #include <sol/forward.hpp>
 

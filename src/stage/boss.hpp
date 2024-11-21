@@ -7,7 +7,7 @@ namespace okuu {
 class boss_entity {
 public:
   void init(okuu::frames birth, ntf::transform2d transform,
-            okuu::entity_movement move, okuu::entity_animator anim);
+            okuu::entity_movement move, okuu::stateless_animator anim);
 
 public:
   void tick();
@@ -22,7 +22,7 @@ public:
 
 private:
   ntf::transform2d _transform;
-  okuu::entity_animator _anim;
+  okuu::stateless_animator _anim;
   okuu::entity_movement _move;
   okuu::frames _birth, _life{0};
   bool _boss_flag{false};
