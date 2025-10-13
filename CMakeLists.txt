@@ -19,6 +19,11 @@ pkg_search_module(LuaJIT REQUIRED luajit)
 list(APPEND LIB_INCLUDE ${LuaJIT_INCLUDE_DIRS})
 list(APPEND LIB_LINK ${LuaJIT_LIBRARIES})
 
+# chimatools
+set(CHIMA_LIB "lib/chimatools")
+list(APPEND LIB_INCLUDE "${CHIMA_LIB}/include")
+list(APPEND LIB_LINK chimatools)
+
 file(GLOB_RECURSE SOURCE_FILES "src/*.cpp")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -28,4 +33,4 @@ set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -Wall -Wextra -Wpedantic -O3 -Wno-ps
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 target_include_directories(${PROJECT_NAME} PUBLIC lib src ${LIB_INCLUDE})
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 20)
-target_link_libraries(${PROJECT_NAME} shogle ${LIB_LINK})
+target_link_libraries(${PROJECT_NAME} ${LIB_LINK})
