@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-project(danmaku_engine CXX C)
+project(okuu CXX C)
 
 set(LIB_INCLUDE)
 set(LIB_LINK)
