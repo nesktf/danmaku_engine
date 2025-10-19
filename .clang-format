@@ -1,21 +1,28 @@
 BasedOnStyle: LLVM
-IndentWidth: 2
 Language: Cpp
 
+IndentWidth: 2
 ColumnLimit: 99
+ContinuationIndentWidth: 2
+
 DerivePointerAlignment: false
 PointerAlignment: Left
-SeparateDefinitionBlocks: Always
-AllowShortFunctionsOnASingleLine: Inline
-AlwaysBreakTemplateDeclarations: true
-SpaceAfterTemplateKeyword: false
 
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLambdasOnASingleLine: Inline
+AllowAllParametersOfDeclarationOnNextLine: false
+
+AlwaysBreakTemplateDeclarations: true
 BreakConstructorInitializers: AfterColon
 BreakInheritanceList: AfterColon
+BreakBeforeBraces: Attach
+
+SeparateDefinitionBlocks: Always
+SpaceAfterTemplateKeyword: false
+
 PackConstructorInitializers: BinPack
 Cpp11BracedListStyle: true
 BinPackArguments: true
-AllowShortLambdasOnASingleLine: Inline
 
 IndentCaseLabels: true
 IndentRequiresClause: false
@@ -25,14 +32,6 @@ AlignEscapedNewlines: Left
 AlignOperands: AlignAfterOperator
 AlignTrailingComments: Always
 
-# AlignConsecutiveDeclarations:
-#   Enabled: true
-#   AcrossEmptyLines: false
-#   AcrossComments: true
-# AlignConsecutiveAssignments:
-#   Enabled: true
-#   AcrossEmptyLines: false
-#   AcrossComments: true
 AlignConsecutiveMacros:
   Enabled: true
   AcrossEmptyLines: false

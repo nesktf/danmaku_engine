@@ -3,22 +3,102 @@
 #include <chimatools/chimatools.h>
 #include <shogle/shogle.hpp>
 
-namespace okuu {
+namespace okuu::render {
 
 using namespace ntf::numdefs;
+using shogle::mat4;
 using shogle::uvec2;
+using shogle::vec2;
+using shogle::vec3;
+
+enum class viewport_res {
+  x480p = 0, // by 560 (6:7), 640 (4:3), 360 (16:9)
+  x600p,
+  x720p,
+  x900p,
+  x1024p,
+  x1080p,
+};
 
 template<typename T>
-using r_expect = ntf::expected<T, std::string>;
+using expect = ntf::expected<T, std::string>;
 
-void r_init();
-void r_destroy();
+struct singleton_handle {
+  singleton_handle() noexcept = default;
+  ~singleton_handle() noexcept;
+};
 
-shogle::window& r_get_window();
+[[nodiscard]] singleton_handle init();
 
-r_expect<shogle::texture2d> r_upload_spritesheet(const chima_spritesheet& sheet);
+shogle::window& window();
 
-} // namespace okuu
+shogle::context_view shogle_ctx();
+
+void render_back(float t);
+
+expect<shogle::texture2d> upload_spritesheet(const chima_spritesheet& sheet);
+
+expect<shogle::pipeline> create_pipeline();
+
+class stage_viewport {
+private:
+  struct stage_uniforms {
+    mat4 proj;
+    mat4 view;
+  };
+
+  static constexpr f32 DEFAULT_ASPECT = 6.f / 7.f;
+  static constexpr uvec2 DEFAULT_SIZE{600, 700};
+
+public:
+  stage_viewport(shogle::texture2d&& fb_tex, shogle::framebuffer&& fb, shogle::pipeline&& pip,
+                 shogle::shader_storage_buffer&& ssbo, u32 xpos, u32 ypos);
+
+public:
+  static stage_viewport create(u32 width, u32 height, u32 xpos, u32 ypos);
+
+public:
+  void render();
+
+  const shogle::framebuffer& framebuffer() const { return _fb; }
+
+  const shogle::shader_storage_buffer& ssbo() const { return _ssbo; }
+
+  const shogle::shader_binding binds() const {
+    return {
+      .buffer = _ssbo,
+      .binding = 1,
+      .size = _ssbo.size(),
+      .offset = 0,
+    };
+  }
+
+private:
+  shogle::texture2d _fb_tex;
+  shogle::framebuffer _fb;
+  shogle::pipeline _pip;
+  shogle::shader_storage_buffer _ssbo;
+
+  // The stage viewport works with screen space coordinates
+  // Each pixel should map 1:1 to the window viewport
+  u32 _xpos, _ypos;
+  stage_uniforms _unif;
+};
+
+struct sprite_command {
+  ntf::weak_cptr<shogle::pipeline> pipeline;
+  ntf::weak_cptr<shogle::texture2d> texture;
+  ntf::nullable<shogle::shader_binding> ssbo_bind;
+};
+
+void render_sprites(stage_viewport& stage, std::vector<sprite_command>& cmds);
+
+struct ui_element {
+  virtual ~ui_element() = default;
+  virtual void render_commands(std::vector<sprite_command>& cmds);
+};
+
+} // namespace okuu::render
 
 // #include <shogle/core/event.hpp>
 // #include <shogle/render/gl/framebuffer.hpp>
