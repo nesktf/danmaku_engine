@@ -45,15 +45,16 @@ static shogle::render_expect<shogle::texture2d> make_missing_albedo(shogle::cont
     .images = {image},
     .generate_mipmaps = false,
   };
-  return shogle::texture2d::create(ctx, {
-                                          .format = shogle::image_format::rgba8u,
-                                          .sampler = shogle::texture_sampler::nearest,
-                                          .addressing = shogle::texture_addressing::repeat,
-                                          .extent = {tex_extent, tex_extent, 1},
-                                          .layers = 1u,
-                                          .levels = 1u,
-                                          .data = data,
-                                        });
+  const shogle::typed_texture_desc desc{
+    .format = shogle::image_format::rgba8u,
+    .sampler = shogle::texture_sampler::nearest,
+    .addressing = shogle::texture_addressing::repeat,
+    .extent = {tex_extent, tex_extent, 1},
+    .layers = 1u,
+    .levels = 1u,
+    .data = data,
+  };
+  return shogle::texture2d::create(ctx, desc);
 }
 
 std::string shogle_to_str(shogle::render_error&& err) {
@@ -70,10 +71,11 @@ struct okuu_render_ctx {
                   shogle::quad_mesh&& quad_, shogle::pipeline&& stage_pip_,
                   shogle::texture2d&& base_fb_tex_, shogle::framebuffer&& base_fb_,
                   shogle::pipeline&& back_pip_) :
-      win{std::move(win_)}, ctx{std::move(ctx_)}, shaders{std::move(shaders_)},
-      quad{std::move(quad_)}, stage_pip{std::move(stage_pip_)},
-      base_fb_tex{std::move(base_fb_tex_)}, base_fb{std::move(base_fb_)},
-      back_pip{std::move(back_pip_)} {}
+      win{std::move(win_)},
+      ctx{std::move(ctx_)}, shaders{std::move(shaders_)}, quad{std::move(quad_)},
+      stage_pip{std::move(stage_pip_)}, base_fb_tex{std::move(base_fb_tex_)},
+      base_fb{std::move(base_fb_)}, back_pip{std::move(back_pip_)},
+      missing_tex{make_missing_albedo(ctx).value()} {}
 
   shogle::window win;
   shogle::context ctx;
@@ -84,6 +86,7 @@ struct okuu_render_ctx {
   shogle::texture2d base_fb_tex;
   shogle::framebuffer base_fb;
   shogle::pipeline back_pip;
+  shogle::texture2d missing_tex;
 };
 
 ntf::nullable<okuu_render_ctx> g_renderer;
@@ -120,31 +123,31 @@ const shogle::depth_test_opts depth_test{
     .fb_buffer = shogle::fbo_buffer::depth24u_stencil8u,
     .fb_use_alpha = false,
   };
-  auto win = shogle::window::create(
-               {
-                 .width = win_width,
-                 .height = win_height,
-                 .title = "test",
-                 .attrib = shogle::win_attrib::decorate | shogle::win_attrib::resizable,
-                 .renderer_api = shogle::context_api::opengl,
-                 .platform_params = &x11,
-                 .renderer_params = &win_gl,
-               })
-               .value();
+  const shogle::win_params win_params{
+    .width = win_width,
+    .height = win_height,
+    .title = "test",
+    .attrib = shogle::win_attrib::decorate | shogle::win_attrib::resizable,
+    .renderer_api = shogle::context_api::opengl,
+    .platform_params = &x11,
+    .renderer_params = &win_gl,
+  };
+  auto win = shogle::window::create(win_params).value();
 
   const auto fb_clear = shogle::clear_flag::color_depth;
   const shogle::color4 fb_color{.3f, .3f, .3f, 1.f};
   const auto vp = shogle::uvec4{0, 0, win.fb_size()};
   const auto gl_params = shogle::window::make_gl_params(win);
-  auto ctx = shogle::context::create({
-                                       .ctx_params = &gl_params,
-                                       .ctx_api = shogle::context_api::opengl,
-                                       .fb_viewport = vp,
-                                       .fb_clear_flags = fb_clear,
-                                       .fb_clear_color = fb_color,
-                                       .alloc = nullptr,
-                                     })
-               .value();
+
+  const shogle::context_params ctx_params{
+    .ctx_params = &gl_params,
+    .ctx_api = shogle::context_api::opengl,
+    .fb_viewport = vp,
+    .fb_clear_flags = fb_clear,
+    .fb_clear_color = fb_color,
+    .alloc = nullptr,
+  };
+  auto ctx = shogle::context::create(ctx_params).value();
 
   auto sprite_vert_shader = shogle::vertex_shader::create(ctx, {vert_sprite}).value();
   auto sprite_frag_shader = shogle::fragment_shader::create(ctx, {frag_sprite}).value();
@@ -154,58 +157,76 @@ const shogle::depth_test_opts depth_test{
   auto frag_fbo_shader = shogle::fragment_shader::create(ctx, {frag_fbo}).value();
 
   const auto attribs = shogle::pnt_vertex::aos_binding();
-  const shogle::shader_t stages[] = {vert_fbo_shader.get(), frag_fbo_shader.get()};
-  auto pip_vp = shogle::pipeline::create(ctx,
-                                         {
+  const shogle::shader_t stages_fb[] = {vert_fbo_shader.get(), frag_fbo_shader.get()};
+  const shogle::pipeline_desc pip_desc{
+    .attributes = {attribs.data(), attribs.size()},
+    .stages = stages_fb,
+    .primitive = shogle::primitive_mode::triangles,
+    .poly_mode = shogle::polygon_mode::fill,
+    .poly_width = 1.f,
+    .tests =
+      {
+        .stencil_test = nullptr,
+        .depth_test = depth_test,
+        .scissor_test = nullptr,
+        .face_culling = nullptr,
+        .blending = blending,
+      },
+  };
 
-                                           .attributes = {attribs.data(), attribs.size()},
-                                           .stages = stages,
-                                           .primitive = shogle::primitive_mode::triangles,
-                                           .poly_mode = shogle::polygon_mode::fill,
-                                           .poly_width = 1.f,
-                                           .tests =
-                                             {
-                                               .stencil_test = nullptr,
-                                               .depth_test = depth_test,
-                                               .scissor_test = nullptr,
-                                               .face_culling = nullptr,
-                                               .blending = blending,
-                                             },
-                                         })
-                  .value();
+  auto pip_vp = shogle::pipeline::create(ctx, pip_desc).value();
 
-  auto fb_tex = shogle::texture2d::create(g_renderer->ctx,
-                                          {
-                                            .format = shogle::image_format::rgba8u,
-                                            .sampler = shogle::texture_sampler::nearest,
-                                            .addressing = shogle::texture_addressing::repeat,
-                                            .extent = {1280, 720, 1},
-                                            .layers = 1u,
-                                            .levels = 1u,
-                                            .data = nullptr,
-                                          })
-                  .value();
+  const shogle::typed_texture_desc fb_tex_desc{
+    .format = shogle::image_format::rgba8u,
+    .sampler = shogle::texture_sampler::nearest,
+    .addressing = shogle::texture_addressing::repeat,
+    .extent = {1280, 720, 1},
+    .layers = 1u,
+    .levels = 1u,
+    .data = nullptr,
+  };
+  auto fb_tex = shogle::texture2d::create(ctx, fb_tex_desc).value();
 
   const shogle::fbo_image fb_img{
     .texture = fb_tex,
     .layer = 0,
     .level = 0,
   };
-  auto fb = shogle::framebuffer::create(g_renderer->ctx,
-                                        {.extent = {1280, 720},
-                                         .viewport = {0, 0, 1280, 720},
-                                         .clear_color{1.f, .0f, .0f, 1.f},
-                                         .clear_flags = shogle::clear_flag::color_depth,
-                                         .test_buffer = shogle::fbo_buffer::depth24u_stencil8u,
-                                         .images = {fb_img}})
-              .value();
+  const shogle::fbo_image_desc fb_desc{.extent = {1280, 720},
+                                       .viewport = {0, 0, 1280, 720},
+                                       .clear_color{1.f, .0f, .0f, 1.f},
+                                       .clear_flags = shogle::clear_flag::color_depth,
+                                       .test_buffer = shogle::fbo_buffer::depth24u_stencil8u,
+                                       .images = {fb_img}};
+  auto fb = shogle::framebuffer::create(ctx, fb_desc).value();
+
+  auto frag_back_shader = shogle::fragment_shader::create(ctx, {frag_back}).value();
+
+  const shogle::shader_t stages_back[] = {vert_fbo_shader.get(), frag_back_shader.get()};
+  const shogle::pipeline_desc back_pip_desc{
+    .attributes = {attribs.data(), attribs.size()},
+    .stages = stages_back,
+    .primitive = shogle::primitive_mode::triangles,
+    .poly_mode = shogle::polygon_mode::fill,
+    .poly_width = 1.f,
+    .tests =
+      {
+        .stencil_test = nullptr,
+        .depth_test = depth_test,
+        .scissor_test = nullptr,
+        .face_culling = nullptr,
+        .blending = blending,
+      },
+  };
+  auto pip_back = shogle::pipeline::create(ctx, back_pip_desc).value();
 
   g_renderer.emplace(std::move(win), std::move(ctx),
                      shader_data{
                        .vert_sprite_generic = std::move(sprite_vert_shader),
                        .frag_sprite_generic = std::move(sprite_frag_shader),
                      },
-                     std::move(quad), std::move(pip_vp), std::move(fb_tex), std::move(fb));
+                     std::move(quad), std::move(pip_vp), std::move(fb_tex), std::move(fb),
+                     std::move(pip_back));
   NTF_ASSERT(g_renderer.has_value());
   g_renderer->win.set_viewport_callback([](auto&, uvec2 vp) {
     shogle::framebuffer::get_default(g_renderer->ctx).viewport({0.f, 0.f, vp.x, vp.y});
@@ -300,7 +321,7 @@ void render_back(float t) {
   auto loc_time = pip.uniform_location("time").value();
 
   const auto proj = glm::ortho(0.f, 1280.f, 720.f, 0.f, -10.f, 1.f);
-  auto transf = shogle::transform2d<float>{}.scale(1280, 720);
+  auto transf = shogle::transform2d<float>{}.scale(1280 * 2, 720 * 2);
 
   const mat4 model = transf.world();
   shogle::uniform_const unifs[] = {
@@ -311,7 +332,7 @@ void render_back(float t) {
   };
 
   const shogle::texture_binding tbind{
-    .texture = g_renderer->base_fb_tex,
+    .texture = g_renderer->missing_tex,
     .sampler = 0,
   };
 
@@ -336,8 +357,8 @@ void render_back(float t) {
 stage_viewport::stage_viewport(shogle::texture2d&& fb_tex, shogle::framebuffer&& fb,
                                shogle::pipeline&& pip, shogle::shader_storage_buffer&& ssbo,
                                u32 xpos, u32 ypos) :
-    _fb_tex{std::move(fb_tex)}, _fb{std::move(fb)}, _pip{std::move(pip)}, _ssbo{std::move(ssbo)},
-    _xpos{xpos}, _ypos{ypos} {
+    _fb_tex{std::move(fb_tex)},
+    _fb{std::move(fb)}, _pip{std::move(pip)}, _ssbo{std::move(ssbo)}, _xpos{xpos}, _ypos{ypos} {
   const vec2 sz = (vec2)_fb_tex.extent();
 
   _unif.proj = glm::ortho(0.f, sz.x, sz.y, 0.f, -10.f, 1.f);
