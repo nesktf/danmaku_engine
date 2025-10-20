@@ -136,19 +136,22 @@ void render_sprites(stage_viewport& stage, std::vector<sprite_command>& cmds) {
   }
 }
 
-static expect<shogle::texture2d> upload_spritesheet(const chima_spritesheet& sheet) {
+sprite::sprite(shogle::texture2d&& tex) : _tex{std::move(tex)} {}
+
+sprite sprite::from_spritesheet(const chima::spritesheet& sheet) {
   NTF_ASSERT(g_renderer.has_value());
 
-  const auto& atlas = sheet.atlas;
-  NTF_ASSERT(atlas.data);
-  NTF_ASSERT(atlas.depth == chima_image_depth::CHIMA_DEPTH_8U);
-  NTF_ASSERT(atlas.channels == 4u);
+  const auto [width, height] = sheet.atlas_extent();
+  const auto atlas_bitmap = sheet.atlas_data();
+
+  NTF_ASSERT(sheet.get_image().depth == chima_image_depth::CHIMA_DEPTH_8U);
+  NTF_ASSERT(sheet.get_image().channels == 4u);
 
   const shogle::image_data image{
-    .bitmap = atlas.data,
+    .bitmap = atlas_bitmap,
     .format = shogle::image_format::rgba8u,
     .alignment = 1u,
-    .extent = {atlas.width, atlas.height, 1},
+    .extent = {width, height, 1},
     .offset = {0, 0, 0},
     .layer = 0u,
     .level = 0u,
@@ -161,19 +164,16 @@ static expect<shogle::texture2d> upload_spritesheet(const chima_spritesheet& she
     .format = shogle::image_format::rgba8u,
     .sampler = shogle::texture_sampler::nearest,
     .addressing = shogle::texture_addressing::repeat,
-    .extent = {atlas.width, atlas.height, 1},
+    .extent = {width, height, 1},
     .layers = 1u,
     .levels = 1u,
     .data = data,
   };
-  return shogle::texture2d::create(g_renderer->ctx, desc)
-    .transform_error([](auto&& err) -> std::string { return err.what(); });
-}
 
-sprite::sprite(shogle::texture2d&& tex) : _tex{std::move(tex)} {}
+  auto spr = shogle::texture2d::create(g_renderer->ctx, desc)
+               .transform_error([](auto&& err) -> std::string { return err.what(); })
+               .value();
 
-sprite sprite::from_spritesheet(const chima_spritesheet& sheet) {
-  auto spr = upload_spritesheet(sheet).value();
   return {std::move(spr)};
 }
 

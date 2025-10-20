@@ -1,7 +1,7 @@
 #pragma once
 
+#include "../assets/chima.hpp"
 #include "./common.hpp"
-#include <chimatools/chimatools.h>
 
 namespace okuu::render {
 
@@ -60,7 +60,7 @@ public:
   sprite(shogle::texture2d&& tex);
 
 public:
-  static sprite from_spritesheet(const chima_spritesheet& sheet);
+  static sprite from_spritesheet(const chima::spritesheet& sheet);
 
 public:
   void render(stage_viewport& vp);

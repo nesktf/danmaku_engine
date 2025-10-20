@@ -9,11 +9,9 @@ void engine_run() {
   auto _rh = okuu::render::init();
 
   auto vp = okuu::render::stage_viewport::create(600, 700, 640, 360);
-  chima_context chima;
-  chima_create_context(&chima, nullptr);
 
-  chima_spritesheet sheet;
-  chima_load_spritesheet(chima, &sheet, "res/spritesheet/chara.chima");
+  auto chima = chima::context::create().value();
+  auto sheet = chima::spritesheet::load(chima, "res/spritesheet/chara.chima").value();
 
   auto img = okuu::render::sprite::from_spritesheet(sheet);
 
@@ -30,9 +28,6 @@ void engine_run() {
     },
   };
   shogle::render_loop(okuu::render::window(), okuu::render::shogle_ctx(), 60, loop);
-
-  chima_destroy_spritesheet(&sheet);
-  chima_destroy_context(chima);
 }
 
 int main(int argc, char* argv[]) {
