@@ -1,5 +1,4 @@
 #include "./instance.hpp"
-#include "../event.hpp"
 #include "./shader_src.hpp"
 #include <ntfstl/logger.hpp>
 
@@ -61,36 +60,6 @@ std::string shogle_to_str(shogle::render_error&& err) {
   return err.what();
 }
 
-struct shader_data {
-  shogle::vertex_shader vert_sprite_generic;
-  shogle::fragment_shader frag_sprite_generic;
-};
-
-struct okuu_render_ctx {
-  okuu_render_ctx(shogle::window&& win_, shogle::context&& ctx_, shader_data&& shaders_,
-                  shogle::quad_mesh&& quad_, shogle::pipeline&& stage_pip_,
-                  shogle::texture2d&& base_fb_tex_, shogle::framebuffer&& base_fb_,
-                  shogle::pipeline&& back_pip_) :
-      win{std::move(win_)},
-      ctx{std::move(ctx_)}, shaders{std::move(shaders_)}, quad{std::move(quad_)},
-      stage_pip{std::move(stage_pip_)}, base_fb_tex{std::move(base_fb_tex_)},
-      base_fb{std::move(base_fb_)}, back_pip{std::move(back_pip_)},
-      missing_tex{make_missing_albedo(ctx).value()} {}
-
-  shogle::window win;
-  shogle::context ctx;
-  shader_data shaders;
-  event_handler<u32, u32> viewport_event;
-  shogle::quad_mesh quad;
-  shogle::pipeline stage_pip;
-  shogle::texture2d base_fb_tex;
-  shogle::framebuffer base_fb;
-  shogle::pipeline back_pip;
-  shogle::texture2d missing_tex;
-};
-
-ntf::nullable<okuu_render_ctx> g_renderer;
-
 const shogle::blend_opts blending{
   .mode = shogle::blend_mode::add,
   .src_factor = shogle::blend_factor::src_alpha,
@@ -105,6 +74,18 @@ const shogle::depth_test_opts depth_test{
 };
 
 } // namespace
+
+ntf::nullable<okuu_render_ctx> g_renderer;
+
+okuu_render_ctx::okuu_render_ctx(shogle::window&& win_, shogle::context&& ctx_,
+                                 shader_data&& shaders_, shogle::quad_mesh&& quad_,
+                                 shogle::pipeline&& stage_pip_, shogle::texture2d&& base_fb_tex_,
+                                 shogle::framebuffer&& base_fb_, shogle::pipeline&& back_pip_) :
+    win{std::move(win_)},
+    ctx{std::move(ctx_)}, shaders{std::move(shaders_)}, quad{std::move(quad_)},
+    stage_pip{std::move(stage_pip_)}, base_fb_tex{std::move(base_fb_tex_)},
+    base_fb{std::move(base_fb_)}, back_pip{std::move(back_pip_)},
+    missing_tex{make_missing_albedo<4>(ctx).value()} {}
 
 [[nodiscard]] singleton_handle init() {
   const u32 win_width = 1280;
@@ -250,40 +231,6 @@ shogle::context_view shogle_ctx() {
   return g_renderer->ctx;
 }
 
-expect<shogle::texture2d> upload_spritesheet(const chima_spritesheet& sheet) {
-  NTF_ASSERT(g_renderer.has_value());
-
-  const auto& atlas = sheet.atlas;
-  NTF_ASSERT(atlas.data);
-  NTF_ASSERT(atlas.depth == chima_image_depth::CHIMA_DEPTH_8U);
-  NTF_ASSERT(atlas.channels == 4u);
-
-  const shogle::image_data image{
-    .bitmap = atlas.data,
-    .format = shogle::image_format::rgba8u,
-    .alignment = 4u,
-    .extent = {atlas.width, atlas.height, 1},
-    .offset = {0, 0, 0},
-    .layer = 0u,
-    .level = 0u,
-  };
-  const shogle::texture_data data{
-    .images = {image},
-    .generate_mipmaps = false,
-  };
-  return shogle::texture2d::create(g_renderer->ctx,
-                                   {
-                                     .format = shogle::image_format::rgba8u,
-                                     .sampler = shogle::texture_sampler::nearest,
-                                     .addressing = shogle::texture_addressing::repeat,
-                                     .extent = {atlas.width, atlas.height, 1},
-                                     .layers = 1u,
-                                     .levels = 1u,
-                                     .data = data,
-                                   })
-    .transform_error(shogle_to_str);
-}
-
 expect<shogle::pipeline> create_pipeline() {
   NTF_ASSERT(g_renderer.has_value());
 
@@ -352,138 +299,6 @@ void render_back(float t) {
     .sort_group = 0,
     .render_callback = {},
   });
-}
-
-stage_viewport::stage_viewport(shogle::texture2d&& fb_tex, shogle::framebuffer&& fb,
-                               shogle::pipeline&& pip, shogle::shader_storage_buffer&& ssbo,
-                               u32 xpos, u32 ypos) :
-    _fb_tex{std::move(fb_tex)},
-    _fb{std::move(fb)}, _pip{std::move(pip)}, _ssbo{std::move(ssbo)}, _xpos{xpos}, _ypos{ypos} {
-  const vec2 sz = (vec2)_fb_tex.extent();
-
-  _unif.proj = glm::ortho(0.f, sz.x, sz.y, 0.f, -10.f, 1.f);
-  _unif.view = shogle::build_view_matrix(vec2{0, 0}, sz * .5f, vec2{1.f, 1.f}, vec3{0.f});
-  _ssbo.upload(_unif);
-}
-
-stage_viewport stage_viewport::create(u32 width, u32 height, u32 xpos, u32 ypos) {
-  NTF_ASSERT(g_renderer.has_value());
-
-  auto fb_tex = shogle::texture2d::create(g_renderer->ctx,
-                                          {
-                                            .format = shogle::image_format::rgba8u,
-                                            .sampler = shogle::texture_sampler::nearest,
-                                            .addressing = shogle::texture_addressing::repeat,
-                                            .extent = {width, height, 1},
-                                            .layers = 1u,
-                                            .levels = 1u,
-                                            .data = nullptr,
-                                          })
-                  .value();
-
-  const shogle::fbo_image fb_img{
-    .texture = fb_tex,
-    .layer = 0,
-    .level = 0,
-  };
-  auto fb = shogle::framebuffer::create(g_renderer->ctx,
-                                        {.extent = {width, height},
-                                         .viewport = {0, 0, width, height},
-                                         .clear_color{1.f, .0f, .0f, 1.f},
-                                         .clear_flags = shogle::clear_flag::color_depth,
-                                         .test_buffer = shogle::fbo_buffer::depth24u_stencil8u,
-                                         .images = {fb_img}})
-              .value();
-  auto pip = create_pipeline().value();
-
-  auto ssbo =
-    shogle::shader_storage_buffer::create(g_renderer->ctx,
-                                          {
-                                            .flags = shogle::buffer_flag::dynamic_storage,
-                                            .size = sizeof(stage_uniforms),
-                                            .data = nullptr,
-                                          })
-      .value();
-
-  return {std::move(fb_tex), std::move(fb), std::move(pip), std::move(ssbo), xpos, ypos};
-}
-
-void stage_viewport::render() {
-  NTF_ASSERT(g_renderer.has_value());
-  auto fb = shogle::framebuffer::get_default(g_renderer->ctx);
-  auto& pip = g_renderer->stage_pip;
-
-  auto loc_model = pip.uniform_location("model").value();
-  auto loc_proj = pip.uniform_location("proj").value();
-  auto loc_sampler = pip.uniform_location("fb_sampler").value();
-
-  const auto proj = glm::ortho(0.f, 1280.f, 720.f, 0.f, -10.f, 1.f);
-  auto sz = _fb_tex.extent();
-  auto transf = shogle::transform2d<float>{}.scale(sz.x, sz.y).pos(_xpos, _ypos);
-
-  const mat4 model = transf.world();
-  shogle::uniform_const unifs[] = {
-    shogle::format_uniform_const(loc_model, model),
-    shogle::format_uniform_const(loc_proj, proj),
-    shogle::format_uniform_const(loc_sampler, 0),
-  };
-
-  const shogle::texture_binding tbind{
-    .texture = _fb_tex,
-    .sampler = 0,
-  };
-
-  g_renderer->ctx.submit_render_command({
-    .target = fb,
-    .pipeline = pip,
-    .buffers = g_renderer->quad.bindings(),
-    .textures = {tbind},
-    .consts = unifs,
-    .opts =
-      {
-        .vertex_count = 6,
-        .vertex_offset = 0,
-        .index_offset = 0,
-        .instances = 0,
-      },
-    .sort_group = 0,
-    .render_callback = {},
-  });
-}
-
-void render_sprites(stage_viewport& stage, std::vector<sprite_command>& cmds) {
-  NTF_ASSERT(g_renderer.has_value());
-  auto& ctx = g_renderer->ctx;
-
-  for (const auto& cmd : cmds) {
-    NTF_ASSERT(cmd.pipeline);
-    NTF_ASSERT(cmd.texture);
-    const shogle::texture_binding tbind{
-      .texture = *cmd.texture,
-      .sampler = 0,
-    };
-    shogle::buffer_binding binds = g_renderer->quad.bindings();
-    if (cmd.ssbo_bind) {
-      binds.shader = {*cmd.ssbo_bind};
-    }
-
-    ctx.submit_render_command({
-      .target = stage.framebuffer(),
-      .pipeline = *cmd.pipeline,
-      .buffers = binds,
-      .textures = {tbind},
-      .consts = {},
-      .opts =
-        {
-          .vertex_count = 6,
-          .vertex_offset = 0,
-          .index_offset = 0,
-          .instances = 0,
-        },
-      .sort_group = 0,
-      .render_callback = {},
-    });
-  }
 }
 
 } // namespace okuu::render
