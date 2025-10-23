@@ -25,7 +25,13 @@ list(APPEND LIB_INCLUDE "${CHIMA_LIB}/include")
 list(APPEND LIB_LINK chimatools)
 
 # file(GLOB_RECURSE SOURCE_FILES "src/*.cpp")
-list(APPEND SOURCE_FILES src/render/instance.cpp src/render/stage.cpp src/main.cpp)
+list(APPEND SOURCE_FILES
+  src/render/instance.cpp
+  src/render/stage.cpp
+  src/stage/entity.cpp
+  src/assets/sprite.cpp
+  src/main.cpp
+)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -Wall -Wextra -Wpedantic -O0 -g2 -ggdb -Wno-psabi")

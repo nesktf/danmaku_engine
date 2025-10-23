@@ -1,30 +1,63 @@
-#include "stage/entity.hpp"
+#include "./entity.hpp"
 
-#include "input.hpp"
+namespace okuu::stage {
 
-namespace stage {
+entity_movement::entity_movement(vec2 vel, vec2 acc, real ret) noexcept :
+    _vel{vel.x, vel.y}, _acc{acc.x, acc.y}, _ret{ret}, _attr{}, _attr_p{}, _attr_exp{} {}
 
-void entity_movement::tick(ntf::transform2d& transform) {
-  // const cmplx v0 = vel;
-  cmplx pos = transform.cpos();
+entity_movement::entity_movement(vec2 vel, vec2 acc, real ret, vec2 attr, vec2 attr_p,
+                                 real attr_exp) noexcept :
+    _vel{vel.x, vel.y}, _acc{acc.x, acc.y}, _ret{ret}, _attr{attr.x, attr.y},
+    _attr_p{attr_p.x, attr_p.y}, _attr_exp{attr_exp} {}
 
-  pos += vel;
-  vel = acc + ret*vel;
+void entity_movement::next_pos(vec2& curr_pos) {
+  cmplx pos{curr_pos.x, curr_pos.y};
+  pos += _vel;
+  _vel = _acc + _ret * _vel;
 
-  if (attr != cmplx{}) {
-    const cmplx av = attr_p - pos;
-    if (attr_exp == 1) {
-      vel += attr*av;
+  if (_attr != cmplx{}) {
+    const cmplx av = _attr_p - pos;
+    if (_attr_exp == 1) {
+      _vel += _attr * av;
     } else {
-      real norm2 = math::norm2(av);
-      norm2 = std::pow(norm2, attr_exp - .5f);
-      vel += attr + (av*norm2);
+      real norm2 = (av.real() * av.real()) + (av.imag() * av.imag());
+      norm2 = std::pow(norm2, _attr_exp - .5f);
+      _vel += _attr + (av * norm2);
     }
   }
-
-  transform.pos(pos);
+  curr_pos.x = pos.real();
+  curr_pos.y = pos.imag();
 }
 
+entity_movement entity_movement::move_linear(vec2 vel) {
+  return {vel, vec2{0.f}, 1.f};
+}
+
+entity_movement entity_movement::move_interpolated(vec2 vel0, vec2 vel1, real ret) {
+  const vec2 end_vel = vel1 * (1.f - ret);
+  return {vel0, end_vel, ret};
+}
+
+entity_movement entity_movement::move_interpolated_halflife(vec2 vel0, vec2 vel1, real hl) {
+  return move_interpolated(vel0, vel1, std::exp2(-1.f / hl));
+}
+
+entity_movement entity_movement::move_interplated_simple(vec2 vel, real boost) {
+  return move_interpolated(vel * (1.f + boost), vel, .8f);
+}
+
+entity_movement entity_movement::move_towards(vec2 target, vec2 vel, vec2 attr, real ret) {
+  return {vel, vec2{0.f}, ret, attr, target, 1.f};
+}
+
+void player_entity::tick() {
+  ++_ticks;
+  _movement.next_pos(_pos);
+}
+
+} // namespace okuu::stage
+
+namespace stage {
 
 void entity_animator::tick(frames entity_ticks) {
   if (!use_sequence) {
@@ -32,64 +65,26 @@ void entity_animator::tick(frames entity_ticks) {
   }
 
   const auto& seq = handle->sequence_at(sequence);
-  index = seq[entity_ticks%seq.size()];
+  index = seq[entity_ticks % seq.size()];
 }
 
 res::sprite entity_animator::sprite() const {
   return res::sprite{handle, index};
 }
 
-
-entity_animator entity_animator_static(res::atlas atlas,
-                                       res::atlas_type::texture_handle index) {
-  return entity_animator {
+entity_animator entity_animator_static(res::atlas atlas, res::atlas_type::texture_handle index) {
+  return entity_animator{
     .handle = atlas,
     .index = index,
     .use_sequence = false,
   };
 }
 
-entity_animator entity_animator_sequence(res::atlas atlas,
-                                         res::atlas_type::sequence_handle seq) {
-  return entity_animator {
+entity_animator entity_animator_sequence(res::atlas atlas, res::atlas_type::sequence_handle seq) {
+  return entity_animator{
     .handle = atlas,
     .sequence = seq,
     .use_sequence = true,
-  };
-}
-
-entity_movement entity_movement_linear(cmplx vel) {
-  return entity_movement {
-    .vel = vel,
-    .acc = 0,
-    .ret = 1,
-  };
-}
-
-entity_movement entity_movement_interp(cmplx vel0, cmplx vel1, real ret) {
-  return entity_movement {
-    .vel = vel0,
-    .acc = vel1*(1-ret),
-    .ret = ret,
-  };
-}
-
-entity_movement entity_movement_interp_hl(cmplx vel0, cmplx vel1, real hl) {
-  return entity_movement_interp(vel0, vel1, std::exp2(-1.f/hl));
-}
-
-entity_movement entity_movement_interp_simple(cmplx vel, real boost) {
-  return entity_movement_interp(vel*(1+boost), vel, .8f);
-}
-
-entity_movement entity_movement_towards(cmplx target, cmplx vel, cmplx attr,
-                                        real ret) {
-  return entity_movement {
-    .vel = vel,
-    .ret = ret,
-    .attr = attr,
-    .attr_p = target,
-    .attr_exp = 1,
   };
 }
 
@@ -114,9 +109,9 @@ void player::movement_type::tick(ntf::transform2d& transform) {
   }
 
   if (input::poll_key(input::keycode::key_l)) {
-    _vel = move_dir*slow_speed;
+    _vel = move_dir * slow_speed;
   } else {
-    _vel = move_dir*base_speed;
+    _vel = move_dir * base_speed;
   }
 
   const vec2 clamp_min{0.f};
@@ -166,7 +161,8 @@ void player::animator_type::tick(const movement_type& movement) {
       }
       break;
     }
-    default: break;
+    default:
+      break;
   }
   _state = next_state;
   _animator.tick();
