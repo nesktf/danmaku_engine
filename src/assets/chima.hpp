@@ -420,7 +420,7 @@ public:
   [[nodiscard]] chima_spritesheet release() noexcept {
     auto ret = _sheet;
     _reset();
-    return _sheet;
+    return ret;
   }
 
   const chima_image& get_image() const {

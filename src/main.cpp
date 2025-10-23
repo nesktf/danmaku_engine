@@ -10,8 +10,8 @@ void engine_run() {
 
   auto vp = okuu::render::stage_viewport::create(600, 700, 640, 360);
 
-  auto chima = chima::context::create().value();
-  auto sheet = chima::spritesheet::load(chima, "res/spritesheet/chara.chima").value();
+  chima::context chima;
+  chima::spritesheet sheet{chima, "res/spritesheet/chara.chima"};
 
   auto img = okuu::render::sprite::from_spritesheet(sheet);
 

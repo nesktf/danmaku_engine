@@ -1,5 +1,6 @@
 #include "./stage.hpp"
 #include "./instance.hpp"
+#include "./shader_src.hpp"
 #include <ntfstl/utility.hpp>
 
 namespace okuu::render {
@@ -7,8 +8,8 @@ namespace okuu::render {
 stage_viewport::stage_viewport(shogle::texture2d&& fb_tex, shogle::framebuffer&& fb,
                                shogle::pipeline&& pip, shogle::shader_storage_buffer&& ssbo,
                                u32 xpos, u32 ypos) :
-    _fb_tex{std::move(fb_tex)},
-    _fb{std::move(fb)}, _pip{std::move(pip)}, _ssbo{std::move(ssbo)}, _xpos{xpos}, _ypos{ypos} {
+    _fb_tex{std::move(fb_tex)}, _fb{std::move(fb)}, _pip{std::move(pip)}, _ssbo{std::move(ssbo)},
+    _xpos{xpos}, _ypos{ypos} {
   const vec2 sz = (vec2)_fb_tex.extent();
 
   _unif.proj = glm::ortho(0.f, sz.x, sz.y, 0.f, -10.f, 1.f);
@@ -19,41 +20,9 @@ stage_viewport::stage_viewport(shogle::texture2d&& fb_tex, shogle::framebuffer&&
 stage_viewport stage_viewport::create(u32 width, u32 height, u32 xpos, u32 ypos) {
   NTF_ASSERT(g_renderer.has_value());
 
-  const shogle::typed_texture_desc fb_tex_desc{
-    .format = shogle::image_format::rgba8u,
-    .sampler = shogle::texture_sampler::nearest,
-    .addressing = shogle::texture_addressing::repeat,
-    .extent = {width, height, 1},
-    .layers = 1u,
-    .levels = 1u,
-    .data = nullptr,
-  };
-
-  auto fb_tex = shogle::texture2d::create(g_renderer->ctx, fb_tex_desc).value();
-
-  const shogle::fbo_image fb_img[] = {{
-    .texture = fb_tex,
-    .layer = 0,
-    .level = 0,
-  }};
-  const shogle::fbo_image_desc fb_desc{
-    .extent = {width, height},
-    .viewport = {0, 0, width, height},
-    .clear_color{.3f, .3f, .3f, 1.f},
-    .clear_flags = shogle::clear_flag::color_depth,
-    .test_buffer = shogle::fbo_buffer::depth24u_stencil8u,
-    .images = fb_img,
-  };
-  auto fb = shogle::framebuffer::create(g_renderer->ctx, fb_desc).value();
-  auto pip = create_pipeline().value();
-
-  const shogle::typed_buffer_desc ssbo_desc{
-    .flags = shogle::buffer_flag::dynamic_storage,
-    .size = sizeof(stage_uniforms),
-    .data = nullptr,
-  };
-
-  auto ssbo = shogle::shader_storage_buffer::create(g_renderer->ctx, ssbo_desc).value();
+  auto [fb_tex, fb] = create_framebuffer(width, height).value();
+  auto pip = create_pipeline(frag_sprite, pipeline_attrib::sprite_generic).value();
+  auto ssbo = create_ssbo(sizeof(stage_uniforms)).value();
 
   return {std::move(fb_tex), std::move(fb), std::move(pip), std::move(ssbo), xpos, ypos};
 }
