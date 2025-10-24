@@ -1,4 +1,5 @@
 #include "render/stage.hpp"
+#include "stage/stage.hpp"
 
 #include <ntfstl/logger.hpp>
 #include <ntfstl/utility.hpp>
@@ -8,24 +9,16 @@ using namespace ntf::numdefs;
 void engine_run() {
   auto _rh = okuu::render::init();
 
-  auto vp = okuu::render::stage_viewport::create(600, 700, 640, 360);
-
-  chima::context chima;
-  chima::spritesheet sheet{chima, "res/spritesheet/chara.chima"};
-
-  auto img = okuu::render::sprite::from_spritesheet(sheet);
+  auto stage = okuu::stage::scene::load("res/packages/test/main.lua").value();
 
   float t = 0.f;
   auto loop = ntf::overload{
     [&](double dt, double alpha) {
       t += (float)dt;
       okuu::render::render_back(t);
-      img.render(vp);
-      vp.render();
+      stage.render(dt, alpha);
     },
-    [&](u32 ups) {
-
-    },
+    [&](u32 ups) { stage.tick(); },
   };
   shogle::render_loop(okuu::render::window(), okuu::render::shogle_ctx(), 60, loop);
 }

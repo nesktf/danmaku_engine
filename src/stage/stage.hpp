@@ -1,137 +1,137 @@
 #pragma once
 
+#include "../render/stage.hpp"
+#include "./entity.hpp"
+
+#define SOL_ALL_SAFETIES_ON 1
 #include <sol/sol.hpp>
 
-#include "global.hpp"
-#include "render.hpp"
+namespace okuu::stage {
 
-#include "stage/entity.hpp"
-#include <list>
+template<typename T>
+using expect = ntf::expected<T, std::string>;
 
-namespace stage {
-
-class projectile_view {
+template<typename T>
+class free_list {
 public:
-  using iterator = std::list<stage::projectile>::iterator;
+  class element {
+  public:
+    element(free_list& list, u32 idx) : _list{list}, _idx{idx} {}
+
+  public:
+    T& operator*() {
+      NTF_ASSERT(_idx < _list->_elems.size());
+      auto& proj = _list->_elems[_idx];
+      NTF_ASSERT(proj.has_value());
+      return *proj;
+    }
+
+    const T& operator*() const {
+      NTF_ASSERT(_idx < _list->_elems.size());
+      auto& proj = _list->_elems[_idx];
+      NTF_ASSERT(proj.has_value());
+      return *proj;
+    }
+
+    T* operator->() { return &**this; }
+
+    const T* operator->() const { return &**this; }
+
+  private:
+    ntf::weak_ptr<free_list> _list;
+    u32 _idx;
+
+    friend class free_list;
+  };
+
+  friend class element;
 
 public:
-  projectile_view(std::list<stage::projectile>& list, std::size_t size);
+  free_list();
 
 public:
-  void for_each(sol::function f);
+  template<typename... Args>
+  element request_elem(Args&&... args) {
+    if (!_free.empty()) {
+      const u32 pos = _free.back();
+      _free.pop();
+      auto& elem = _elems[pos];
+      elem.emplace(std::forward<Args>(args)...);
+      return {*this, pos};
+    }
 
-public:
-  std::size_t size() const { return _size; }
+    _elems.emplace(std::in_place, std::forward<Args>(args)...);
+    return {*this, static_cast<u32>(_elems.size()) - 1u};
+  }
+
+  void return_elem(element elem) {
+    const u32 idx = elem._idx;
+    NTF_ASSERT(idx < _elems.size());
+    auto& proj = _elems[idx];
+    NTF_ASSERT(proj.has_value());
+    proj.reset();
+    _free.push(idx);
+  }
+
+  void clear() {
+    _elems.clear();
+    while (!_free.empty()) {
+      _free.pop();
+    }
+  }
+
+  ntf::span<ntf::nullable<T>> elems() { return {_elems.begin(), _elems.size()}; }
+
+  ntf::cspan<ntf::nullable<T>> elems() const { return {_elems.begin(), _elems.size()}; }
 
 private:
-  iterator _begin;
-  std::size_t _size;
+  std::vector<ntf::nullable<T>> _elems;
+  std::queue<u32> _free;
 };
 
+class scene {
+public:
+  static constexpr size_t MAX_BOSSES = 4u;
 
-class context {
-private:
-  enum class state {
-    loading = 0,
-    main,
-    end,
+  struct scene_objects {
+    scene_objects(player_entity&& player_) :
+        projs{}, bosses{}, boss_count{0u}, player{std::move(player_)} {}
+
+    free_list<projectile_entity> projs;
+    std::array<ntf::nullable<boss_entity>, MAX_BOSSES> bosses;
+    size_t boss_count;
+    player_entity player;
   };
 
 public:
-  context(std::string_view script_path);
+  scene(sol::state&& lua, sol::table lib_table, std::unique_ptr<scene_objects>&& objs,
+        render::stage_viewport&& vp);
+
+public:
+  static expect<scene> load(const std::string& script_path);
 
 public:
   void tick();
-  void render(double dt, [[maybe_unused]] double alpha);
 
-public:
-  void start();
+  // The scene has to render the following (in order):
+  // - The background
+  // - The boss(es)
+  // - The player
+  // - The items
+  // - The danmaku
+  void render(double dt, double alpha);
 
 private:
-  void _lua_post_open(sol::table stlib);
-  void _prepare_player();
-
-private:
-  context::state _state{context::state::loading};
-
   sol::state _lua;
 
-  sol::coroutine _task;
   sol::thread _task_thread;
+  sol::coroutine _task;
 
-  sol::protected_function _on_tick;
-  sol::protected_function _on_render;
+  u32 _ticks, _frames;
+  u32 _task_time, _task_wait;
 
-  frames _tick_count{0}, _frame_count{0};
-  frames _task_time{0}, _task_wait{0};
-
-  std::list<stage::projectile> _projs;
-  stage::boss _boss;
-  stage::player _player;
-
+  std::unique_ptr<scene_objects> _objects;
   render::stage_viewport _viewport;
-
-  render::viewport_event::subscription _vp_sub;
-
-public:
-  ~context() noexcept;
-  NTF_DISABLE_COPY(context);
 };
 
-
-template<typename T, typename Allocator>
-class entity_pool {
-public:
-  using allocator_type = Allocator;
-
-private:
-  struct pool_header {
-    pool_header* next;
-  };
-
-public:
-  entity_pool() = default;
-
-public:
-  T* acquire();
-  void release(T* obj);
-
-public:
-  std::size_t used() const { return _used; }
-  std::size_t allocated() const { return _allocated; }
-
-private:
-  allocator_type _allocator;
-  pool_header* _free{nullptr};
-  std::size_t _allocated{0}, _used{0};
-};
-
-template<typename T, typename Allocator>
-auto entity_pool<T, Allocator>::acquire() -> T* {
-  pool_header* header = _free;
-  T* obj;
-
-  if (_free) {
-    obj = reinterpret_cast<T*>(_free);
-    _free = _free->next;
-  } else {
-    obj = _allocator.allocate(1);
-    ++_allocated;
-  }
-
-  _allocator.construct(obj, T{});
-  ++_used;
-
-  return obj;
-}
-
-template<typename T, typename Allocator>
-void entity_pool<T, Allocator>::release(T* obj) {
-  _allocator.destroy(obj);
-  pool_header* header = reinterpret_cast<pool_header*>(obj);
-  header->next = _free;
-  _free = header;
-  --_used;
-}
-
-} // namespace stage
+} // namespace okuu::stage

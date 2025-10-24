@@ -1,12 +1,162 @@
-#define SOL_ALL_SAFETIES_ON 1
-#include <sol/sol.hpp>
+#include "./stage.hpp"
+
+#include <ntfstl/logger.hpp>
+
+namespace okuu::stage {
+
+namespace {
+
+constexpr std::string_view incl_path = ";res/script/?.lua";
+
+void stlib_log(sol::table& module) {
+  module.set_function("error", [](std::string msg) { ntf::logger::error("{}", msg); });
+  module.set_function("warn", [](std::string msg) { ntf::logger::warning("{}", msg); });
+  module.set_function("debug", [](std::string msg) { ntf::logger::debug("{}", msg); });
+  module.set_function("info", [](std::string msg) { ntf::logger::info("{}", msg); });
+  module.set_function("verbose", [](std::string msg) { ntf::logger::info("{}", msg); });
+}
+
+void stlib_math(sol::table& module) {
+  auto cmplx_type = module.new_usertype<cmplx>(
+    "cmplx", sol::call_constructor,
+    sol::constructors<cmplx(), cmplx(float), cmplx(float, float)>{}, "real",
+    sol::property(
+      +[](cmplx& c, float f) { c.real(f); }, +[](cmplx& c) -> float { return c.real(); }),
+    "imag",
+    sol::property(
+      +[](cmplx& c, float f) { c.imag(f); }, +[](cmplx& c) -> float { return c.imag(); }),
+    "expi", &shogle::expic, "polar", &std::polar<float>,
+
+    sol::meta_function::addition, sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator+),
+    sol::meta_function::subtraction,
+    sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator-),
+    sol::meta_function::multiplication,
+    sol::overload(sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator*),
+                  sol::resolve<cmplx(const cmplx&, const float&)>(&std::operator*),
+                  sol::resolve<cmplx(const float&, const cmplx&)>(&std::operator*)),
+    sol::meta_function::division,
+    sol::overload(sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator/),
+                  sol::resolve<cmplx(const cmplx&, const float&)>(&std::operator/),
+                  sol::resolve<cmplx(const float&, const cmplx&)>(&std::operator/)));
+}
+
+void stlib_res(sol::table& module) {
+  // auto sprite_type = module.new_usertype<res::sprite>(
+  //   "sprite", sol::no_constructor
+  // );
+  // auto tex_type = module.new_usertype<res::texture>(
+  //   "texture", sol::no_constructor
+  // );
+  // auto shader_type = module.new_usertype<res::shader>(
+  //   "shader", sol::no_constructor
+  // );
+  // auto font_type = module.new_usertype<res::font>(
+  //   "font", sol::no_constructor
+  // );
+}
+
+using module_pair = std::pair<const std::string_view, void (*)(sol::table&)>;
+constexpr module_pair modules[]{
+  {"log", &stlib_log},
+  {"math", &stlib_math},
+  {"res", &stlib_res},
+};
+constexpr std::size_t module_count = sizeof(modules) / sizeof(module_pair);
+constexpr std::string_view stlib_key = "okuu";
+
+sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<scene::scene_objects> objs) {
+  lua.open_libraries(sol::lib::base, sol::lib::coroutine, sol::lib::package, sol::lib::table,
+                     sol::lib::math, sol::lib::string);
+
+  lua["package"]["path"] = incl_path.data();
+
+  auto lib = lua[stlib_key.data()].get_or_create<sol::table>();
+  for (std::size_t i = 0; i < module_count; ++i) {
+    const auto& [name, loader] = modules[i];
+    auto module = lib[name.data()].get_or_create<sol::table>();
+    loader(module);
+  }
+
+  auto lib_stage = lib["stage"].get_or_create<sol::table>();
+  lib_stage.set_function("spawn_boss", [=](float scale, cmplx p0, cmplx p1) {
+    if (objs->boss_count >= scene::MAX_BOSSES) {
+      ntf::logger::warning("Over the boss limit");
+      return;
+    }
+
+    const u32 boss_idx = objs->boss_count;
+    objs->bosses[boss_idx].emplace();
+    objs->boss_count++;
+  });
+
+  lib_stage.set_function("move_boss", [=](sol::table args) {
+    if (objs->boss_count == 0) {
+      return;
+    }
+    if (!args["pos"].is<cmplx>()) {
+      return;
+    }
+    const cmplx pos = args["pos"].get<cmplx>();
+
+    const u32 boss_idx = args.get_or<u32>("boss_idx", objs->boss_count - 1); // the last boss
+    if (boss_idx >= objs->boss_count) {
+      return;
+    }
+    auto& boss = objs->bosses[boss_idx];
+    NTF_ASSERT(boss.has_value());
+    boss->pos(pos);
+  });
+
+  return lib;
+}
+
+} // namespace
+
+expect<scene> scene::load(const std::string& script_path) {
+  auto vp = okuu::render::stage_viewport::create(600, 700, 640, 360);
+
+  sol::state lua;
+
+  player_entity player{};
+  auto objs = std::make_unique<scene_objects>(std::move(player));
+
+  auto lib_table = prepare_lua_env(lua, *objs);
+
+  lua.script_file(script_path);
+  if (!lib_table["init"].is<sol::function>()) {
+    return {ntf::unexpect, "Init function not defined in stage script"};
+  }
+  if (!lib_table["main"].is<sol::function>()) {
+    return {ntf::unexpect, "Main function not defined in stage script"};
+  }
+
+  chima::context chima;
+  chima::spritesheet sheet{chima, "res/spritesheet/chara.chima"};
+  auto img = okuu::render::sprite::from_spritesheet(sheet);
+}
+
+scene::scene(sol::state&& lua, sol::table lib_table, std::unique_ptr<scene_objects>&& objs,
+             render::stage_viewport&& vp) :
+    _lua{std::move(lua)},
+    _task_thread{sol::thread::create(_lua.lua_state())},
+    _task{_task_thread.state(), lib_table["main"].get<sol::function>()}, _objects{std::move(objs)},
+    _viewport{std::move(vp)} {}
+
+void scene::render(double dt, double alpha) {
+  NTF_UNUSED(alpha);
+
+  // img.render(vp);
+  // vp.render();
+}
+
+} // namespace okuu::stage
 
 #include "package/lua_state.hpp"
 
 #include "stage/stage.hpp"
 
-#include "resources.hpp"
 #include "render.hpp"
+#include "resources.hpp"
 
 #include <shogle/core/allocator.hpp>
 
@@ -14,9 +164,9 @@ namespace stage {
 
 context::context(std::string_view script_path) {
   auto fb_shader = res::get_shader("framebuffer").value();
-  _viewport.init(VIEWPORT, VIEWPORT/2, (vec2)render::win_size()*.5f, fb_shader);
+  _viewport.init(VIEWPORT, VIEWPORT / 2, (vec2)render::win_size() * .5f, fb_shader);
   _vp_sub = render::vp_subscribe([this](std::size_t w, std::size_t h) {
-    _viewport.update_pos(vec2{w, h}*.5f);
+    _viewport.update_pos(vec2{w, h} * .5f);
   });
 
   auto stlib = package::stlib_open(_lua);
@@ -31,9 +181,7 @@ context::context(std::string_view script_path) {
   }
 
   if (res::has_requests()) {
-    res::start_loading([this]() {
-      start();
-    });
+    res::start_loading([this]() { start(); });
   } else {
     start();
   }
@@ -71,28 +219,22 @@ void context::_lua_post_open(sol::table stlib) {
     const auto aspect = atlas->at(entry).aspect();
 
     ntf::transform2d transform;
-    transform
-      .pos(p0)
-      .scale(scale*aspect);
+    transform.pos(p0).scale(scale * aspect);
 
     _boss = stage::boss{stage::boss::args{
       .transform = transform,
-      .movement = stage::entity_movement_towards(p1, DT*cmplx{10.f,10.f}, cmplx{DT}, .8f),
+      .movement = stage::entity_movement_towards(p1, DT * cmplx{10.f, 10.f}, cmplx{DT}, .8f),
       .animator = stage::entity_animator_static(atlas, entry),
     }};
   });
 
   module.set_function("move_boss", [this](cmplx pos) {
-    _boss.movement = stage::entity_movement_towards(pos, DT*cmplx{10.f,10.f}, cmplx{DT}, .8f);
+    _boss.movement = stage::entity_movement_towards(pos, DT * cmplx{10.f, 10.f}, cmplx{DT}, .8f);
   });
 
-  module.set_function("boss_pos", [this]() -> cmplx {
-    return _boss.transform.cpos();
-  });
-  
-  module.set_function("player_pos", [this]() -> cmplx {
-    return _player.transform.cpos();
-  });
+  module.set_function("boss_pos", [this]() -> cmplx { return _boss.transform.cpos(); });
+
+  module.set_function("player_pos", [this]() -> cmplx { return _player.transform.cpos(); });
 
   module.set_function("spawn_danmaku", [this](cmplx dir, float speed, cmplx pos) {
     const auto atlas = res::get_atlas("effects").value();
@@ -100,55 +242,47 @@ void context::_lua_post_open(sol::table stlib) {
     const auto aspect = atlas->at(entry).aspect();
 
     ntf::transform2d transform;
-    transform
-      .pos(pos)
-      .scale(aspect*20.f);
+    transform.pos(pos).scale(aspect * 20.f);
 
-    _projs.emplace_back(stage::projectile::args {
+    _projs.emplace_back(stage::projectile::args{
       .transform = transform,
-      .movement = stage::entity_movement_linear(dir*speed),
+      .movement = stage::entity_movement_linear(dir * speed),
       .animator = stage::entity_animator_static(atlas, entry),
-      .angular_speed = 2*M_PIf*DT,
+      .angular_speed = 2 * M_PIf * DT,
     });
   });
-
 
   module.set_function("viewport", [this]() -> sol::table {
     return _lua.create_table_with("x", VIEWPORT.x, "y", VIEWPORT.y);
   });
 
   module.set_function("cowait", sol::yielding([this](frame_delay time) {
-    _task_wait = time;
-    logger::debug("[stage::context] Task yield {} frames", time);
-  }));
-
+                        _task_wait = time;
+                        logger::debug("[stage::context] Task yield {} frames", time);
+                      }));
 
   auto move_type = module.new_usertype<stage::entity_movement>(
-    "move", sol::no_constructor,
-    "make_linear", +[](sol::table tbl) -> stage::entity_movement {
+    "move", sol::no_constructor, "make_linear", +[](sol::table tbl) -> stage::entity_movement {
       cmplx vel = cmplx{tbl.get<float>("real"), tbl.get<float>("imag")};
       return stage::entity_movement_linear(vel);
-    }
-  );
+    });
 
   auto proj_type = module.new_usertype<stage::projectile>(
-    "proj", sol::no_constructor,
-    "movement", &stage::projectile::movement,
-    "angular_speed", &stage::projectile::angular_speed
-  );
+    "proj", sol::no_constructor, "movement", &stage::projectile::movement, "angular_speed",
+    &stage::projectile::angular_speed);
 
   auto view_type = module.new_usertype<stage::projectile_view>(
-    "pview", sol::no_constructor,
-    "make", [this](std::size_t size) { return projectile_view{_projs, size}; },
+    "pview", sol::no_constructor, "make",
+    [this](std::size_t size) {
+      return projectile_view{_projs, size};
+    },
     // "pview", sol::call_constructor, sol::constructors<stage::projectile_view(std::size_t)>{},
-    "size", &stage::projectile_view::size,
-    "for_each", &stage::projectile_view::for_each
-  );
+    "size", &stage::projectile_view::size, "for_each", &stage::projectile_view::for_each);
 }
 
 void context::_prepare_player() {
   const auto atlas = res::get_atlas("chara_cirno").value();
-  const stage::player::animator_type::animation_data anim {
+  const stage::player::animator_type::animation_data anim{
     atlas->find_sequence("cirno.idle").value(),
 
     atlas->find_sequence("cirno.left").value(),
@@ -162,17 +296,15 @@ void context::_prepare_player() {
   const vec2 sprite_aspect = atlas->at(atlas->sequence_at(anim[0])[0]).aspect();
 
   ntf::transform2d transform;
-  transform
-    .pos((vec2)VIEWPORT*.5f)
-    .scale(sprite_aspect*70.f);
+  transform.pos((vec2)VIEWPORT * .5f).scale(sprite_aspect * 70.f);
 
-  float sp = 500.f*DT;
+  float sp = 500.f * DT;
   _player = stage::player{stage::player::args{
     .transform = transform,
     .atlas = atlas,
     .anim = anim,
     .base_speed = sp,
-    .slow_speed = sp*.66f,
+    .slow_speed = sp * .66f,
   }};
 }
 
@@ -204,12 +336,8 @@ void context::tick() {
   std::erase_if(_projs, [](const auto& proj) {
     const auto pos = proj.transform.pos();
     const float extra = 10.f;
-    return (
-      pos.x < -extra || 
-      pos.y < -extra || 
-      pos.x > VIEWPORT.x+extra || 
-      pos.y > VIEWPORT.y+extra
-    );
+    return (pos.x < -extra || pos.y < -extra || pos.x > VIEWPORT.x + extra ||
+            pos.y > VIEWPORT.y + extra);
   });
 
   ++_tick_count;
@@ -242,9 +370,7 @@ void context::render(double dt, [[maybe_unused]] double alpha) {
   render::draw_background(dt);
   _viewport.draw(render::win_proj());
   ntf::transform2d text_transform;
-  text_transform
-    .pos(30.f, 100.f)
-    .scale(.75f);
+  text_transform.pos(30.f, 100.f).scale(.75f);
   std::string txt = fmt::format("danmaku: {}", _projs.size());
   render::draw_text(txt, color4{1.f}, text_transform.mat());
   auto cpos = _player.transform.pos();
@@ -252,21 +378,18 @@ void context::render(double dt, [[maybe_unused]] double alpha) {
   text_transform.pos(30.f, 140.f);
   render::draw_text(txt, color4{1.f}, text_transform.mat());
 
-
   ++_frame_count;
 }
 
 projectile_view::projectile_view(std::list<stage::projectile>& list, std::size_t size) :
-  _size(size) {
+    _size(size) {
   std::list<stage::projectile> new_list;
   const auto atlas = res::get_atlas("effects").value();
   const auto entry = atlas->group_at(atlas->find_group("star_med").value())[1];
   const auto aspect = atlas->at(entry).aspect();
 
   ntf::transform2d transform;
-  transform
-    .pos((vec2)VIEWPORT*.5f)
-    .scale(aspect*20.f);
+  transform.pos((vec2)VIEWPORT * .5f).scale(aspect * 20.f);
 
   for (size_t i = 0; i < size; ++i) {
     new_list.emplace_back(stage::projectile::args{

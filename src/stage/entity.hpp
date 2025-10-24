@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../assets/sprite.hpp"
 #include <shogle/shogle.hpp>
 
 namespace okuu::stage {
@@ -47,7 +48,15 @@ private:
   vec2 _scale;
   real _rot;
   real _angular_speed;
+  uint32_t _flags;
   entity_movement _movement;
+};
+
+class boss_entity {
+public:
+private:
+  uint32_t _flags;
+  assets::sprite_animator _anim;
 };
 
 class player_entity {
@@ -58,6 +67,8 @@ private:
   u32 _ticks;
   vec2 _pos;
   entity_movement _movement;
+  uint32_t _flags;
+  assets::sprite_animator _anim;
 };
 
 } // namespace okuu::stage
