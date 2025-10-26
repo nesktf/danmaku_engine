@@ -8,98 +8,80 @@ namespace {
 
 constexpr std::string_view incl_path = ";res/script/?.lua";
 
-void stlib_log(sol::table& module) {
-  module.set_function("error", [](std::string msg) { ntf::logger::error("{}", msg); });
-  module.set_function("warn", [](std::string msg) { ntf::logger::warning("{}", msg); });
-  module.set_function("debug", [](std::string msg) { ntf::logger::debug("{}", msg); });
-  module.set_function("info", [](std::string msg) { ntf::logger::info("{}", msg); });
-  module.set_function("verbose", [](std::string msg) { ntf::logger::info("{}", msg); });
-}
-
-void stlib_math(sol::table& module) {
-  auto cmplx_type = module.new_usertype<cmplx>(
-    "cmplx", sol::call_constructor,
-    sol::constructors<cmplx(), cmplx(float), cmplx(float, float)>{}, "real",
-    sol::property(
-      +[](cmplx& c, float f) { c.real(f); }, +[](cmplx& c) -> float { return c.real(); }),
-    "imag",
-    sol::property(
-      +[](cmplx& c, float f) { c.imag(f); }, +[](cmplx& c) -> float { return c.imag(); }),
-    "expi", &shogle::expic, "polar", &std::polar<float>,
-
-    sol::meta_function::addition, sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator+),
-    sol::meta_function::subtraction,
-    sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator-),
-    sol::meta_function::multiplication,
-    sol::overload(sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator*),
-                  sol::resolve<cmplx(const cmplx&, const float&)>(&std::operator*),
-                  sol::resolve<cmplx(const float&, const cmplx&)>(&std::operator*)),
-    sol::meta_function::division,
-    sol::overload(sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator/),
-                  sol::resolve<cmplx(const cmplx&, const float&)>(&std::operator/),
-                  sol::resolve<cmplx(const float&, const cmplx&)>(&std::operator/)));
-}
-
-void stlib_res(sol::table& module) {
-  // auto sprite_type = module.new_usertype<res::sprite>(
-  //   "sprite", sol::no_constructor
-  // );
-  // auto tex_type = module.new_usertype<res::texture>(
-  //   "texture", sol::no_constructor
-  // );
-  // auto shader_type = module.new_usertype<res::shader>(
-  //   "shader", sol::no_constructor
-  // );
-  // auto font_type = module.new_usertype<res::font>(
-  //   "font", sol::no_constructor
-  // );
-}
-
-using module_pair = std::pair<const std::string_view, void (*)(sol::table&)>;
+using module_pair = std::pair<const char*, void (*)(sol::table&)>;
 constexpr module_pair modules[]{
-  {"log", &stlib_log},
-  {"math", &stlib_math},
-  {"res", &stlib_res},
+  {"log",
+   +[](sol::table& module) {
+     module.set_function("error", [](std::string msg) { ntf::logger::error("{}", msg); });
+     module.set_function("warn", [](std::string msg) { ntf::logger::warning("{}", msg); });
+     module.set_function("debug", [](std::string msg) { ntf::logger::debug("{}", msg); });
+     module.set_function("info", [](std::string msg) { ntf::logger::info("{}", msg); });
+     module.set_function("verbose", [](std::string msg) { ntf::logger::info("{}", msg); });
+   }},
+  {"math",
+   +[](sol::table& module) {
+     auto cmplx_type = module.new_usertype<cmplx>(
+       "cmplx", sol::call_constructor,
+       sol::constructors<cmplx(), cmplx(float), cmplx(float, float)>{}, "real",
+       sol::property(
+         +[](cmplx& c, float f) { c.real(f); }, +[](cmplx& c) -> float { return c.real(); }),
+       "imag",
+       sol::property(
+         +[](cmplx& c, float f) { c.imag(f); }, +[](cmplx& c) -> float { return c.imag(); }),
+       "expi", &shogle::expic, "polar", &std::polar<float>,
+
+       sol::meta_function::addition,
+       sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator+),
+       sol::meta_function::subtraction,
+       sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator-),
+       sol::meta_function::multiplication,
+       sol::overload(sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator*),
+                     sol::resolve<cmplx(const cmplx&, const float&)>(&std::operator*),
+                     sol::resolve<cmplx(const float&, const cmplx&)>(&std::operator*)),
+       sol::meta_function::division,
+       sol::overload(sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator/),
+                     sol::resolve<cmplx(const cmplx&, const float&)>(&std::operator/),
+                     sol::resolve<cmplx(const float&, const cmplx&)>(&std::operator/)));
+   }},
 };
 constexpr std::size_t module_count = sizeof(modules) / sizeof(module_pair);
 constexpr std::string_view stlib_key = "okuu";
 
-sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<scene_objects> objs,
-                           ntf::weak_cptr<scene_asset_bundle> assets) {
+sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<stage_scene> scene) {
   lua.open_libraries(sol::lib::base, sol::lib::coroutine, sol::lib::package, sol::lib::table,
                      sol::lib::math, sol::lib::string);
 
   lua["package"]["path"] = incl_path.data();
 
   auto lib = lua[stlib_key.data()].get_or_create<sol::table>();
-  for (std::size_t i = 0; i < module_count; ++i) {
+  for (size_t i = 0; i < module_count; ++i) {
     const auto& [name, loader] = modules[i];
-    auto module = lib[name.data()].get_or_create<sol::table>();
+    auto module = lib[name].get_or_create<sol::table>();
     loader(module);
   }
 
   static constexpr real DT = 1.f / 60.f;
   auto lib_stage = lib["stage"].get_or_create<sol::table>();
   lib_stage.set_function("spawn_boss", [=](float scale, cmplx p0, cmplx p1) {
-    if (objs->boss_count >= scene_objects::MAX_BOSSES) {
+    if (scene->boss_count >= stage_scene::MAX_BOSSES) {
       ntf::logger::warning("Over the boss limit");
       return;
     }
 
-    auto [atlas_idx, sprite] = assets->find_sprite("ball_solid").value();
-    const auto& atlas = assets->atlas[atlas_idx];
+    auto [atlas_idx, sprite] = scene->find_sprite("ball_solid").value();
+    const auto& atlas = scene->atlas_assets[atlas_idx];
     entity_sprite boss_sprite{atlas, sprite};
     const vec2 boss_pos{p0.real(), p0.imag()};
     const auto mov = entity_movement::move_towards({p1.real(), p1.imag()}, DT * vec2{10.f, 10.f},
                                                    vec2{DT, DT}, .8f);
 
-    const u32 boss_idx = objs->boss_count;
-    objs->bosses[boss_idx].emplace(0u, boss_pos, boss_sprite);
-    objs->boss_count++;
+    const u32 boss_idx = scene->boss_count;
+    scene->bosses[boss_idx].emplace(0u, boss_pos, boss_sprite, mov);
+    scene->boss_count++;
   });
 
   lib_stage.set_function("move_boss", [=](sol::table args) {
-    if (objs->boss_count == 0) {
+    if (scene->boss_count == 0) {
       return;
     }
     if (!args["pos"].is<cmplx>()) {
@@ -107,34 +89,33 @@ sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<scene_objects> obj
     }
     const cmplx pos = args["pos"].get<cmplx>();
 
-    const u32 boss_idx = args.get_or<u32>("boss_idx", objs->boss_count - 1); // the last boss
-    if (boss_idx >= objs->boss_count) {
+    const u32 boss_idx = args.get_or<u32>("boss_idx", scene->boss_count - 1); // the last boss
+    if (boss_idx >= scene->boss_count) {
       return;
     }
-    auto& boss = objs->bosses[boss_idx];
+    auto& boss = scene->bosses[boss_idx];
     NTF_ASSERT(boss.has_value());
     boss->set_movement(entity_movement::move_towards({pos.real(), pos.imag()},
                                                      DT * vec2{10.f, 10.f}, vec2{DT, DT}, .8f));
   });
 
   lib_stage.set_function("boss_pos", [=](sol::table args) -> cmplx {
-    if (objs->boss_count == 0) {
+    if (scene->boss_count == 0) {
       return {};
     }
-    const u32 boss_idx = args.get_or<u32>("boss_idx", objs->boss_count - 1); // the last boss
-    if (boss_idx >= objs->boss_count) {
+    const u32 boss_idx = args.get_or<u32>("boss_idx", scene->boss_count - 1); // the last boss
+    if (boss_idx >= scene->boss_count) {
       return {};
     }
-    auto& boss = objs->bosses[boss_idx];
+    auto& boss = scene->bosses[boss_idx];
     NTF_ASSERT(boss.has_value());
     return {boss->pos().x, boss->pos().y};
   });
 
-  lib_stage.set_function("player_pos", [=]() -> cmplx {
-    return {objs->player.pos().x, objs->player.pos().y};
-  });
+  lib_stage.set_function(
+    "player_pos", [=]() -> cmplx { return {scene->player.pos().x, scene->player.pos().y}; });
 
-  // lib_stage.set_function("cowait", sol::yielding([=](u32 time) { _task_wait = time; }));
+  lib_stage.set_function("cowait", sol::yielding([=](u32 time) { scene->wait_time = time; }));
 
   auto mov_type = lib_stage.new_usertype<entity_movement>(
     "move", sol::no_constructor, "make_linear", +[](sol::table tbl) {
@@ -147,30 +128,35 @@ sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<scene_objects> obj
     "angular_speed",
     sol::property(&projectile_entity::angular_speed, &projectile_entity::set_angular_speed));
 
-  auto view_type = lib_stage.new_usertype<lua_environment::projectile_view>(
+  auto view_type = lib_stage.new_usertype<lua_env::projectile_view>(
     "pview", sol::no_constructor, "make",
-    [=](size_t size) -> lua_environment::projectile_view {
+    [=](size_t size) -> lua_env::projectile_view {
 
     },
-    "size", sol::property(&lua_environment::projectile_view::size), "for_each",
-    &lua_environment::projectile_view::for_each);
+    "size", sol::property(&lua_env::projectile_view::size), "for_each",
+    &lua_env::projectile_view::for_each);
 
   return lib;
 }
 
 } // namespace
 
-expect<lua_environment> lua_environment::load(const std::string& script_path) {
+void stage_scene::render(double dt, double alpha) {
+  NTF_UNUSED(alpha);
+
+  // img.render(vp);
+  // vp.render();
+}
+
+expect<lua_env> lua_env::load(const std::string& script_path,
+                              std::unique_ptr<stage_scene>&& scene) {
   auto vp = okuu::render::stage_viewport::create(600, 700, 640, 360);
 
   sol::state lua;
 
-  player_entity player{};
-  auto objs = std::make_unique<scene_objects>(std::move(player));
-
-  auto lib_table = prepare_lua_env(lua, *objs);
-
+  auto lib_table = prepare_lua_env(lua, scene.get());
   lua.script_file(script_path);
+
   if (!lib_table["init"].is<sol::function>()) {
     return {ntf::unexpect, "Init function not defined in stage script"};
   }
@@ -178,28 +164,15 @@ expect<lua_environment> lua_environment::load(const std::string& script_path) {
     return {ntf::unexpect, "Main function not defined in stage script"};
   }
 
-  chima::context chima;
-  chima::spritesheet sheet{chima, "res/spritesheet/chara.chima"};
-  auto img = okuu::render::sprite::from_spritesheet(sheet);
+  return {ntf::in_place, std::move(lua), std::move(lib_table), std::move(scene)};
 }
 
-lua_environment::lua_environment(sol::state&& lua, sol::table lib_table,
-                                 std::unique_ptr<scene_objects>&& objs,
-                                 render::stage_viewport&& vp) :
-    _lua{std::move(lua)},
-    _task_thread{sol::thread::create(_lua.lua_state())},
-    _task{_task_thread.state(), lib_table["main"].get<sol::function>()}, _objects{std::move(objs)},
-    _viewport{std::move(vp)} {}
-
-void lua_environment::render(double dt, double alpha) {
-  NTF_UNUSED(alpha);
-
-  // img.render(vp);
-  // vp.render();
+lua_env::lua_env(sol::state&& lua, sol::table lib_table, std::unique_ptr<stage_scene>&& scene) :
+    _lua{std::move(lua)}, _task_thread{sol::thread::create(_lua.lua_state())},
+    _task{_task_thread.state(), lib_table["main"].get<sol::function>()}, _scene{std::move(scene)} {
 }
 
-lua_environment::projectile_view::projectile_view(free_list<projectile_entity>& list,
-                                                  size_t count) :
+lua_env::projectile_view::projectile_view(free_list<projectile_entity>& list, size_t count) :
     _list{list} {
   _items.reserve(count);
   for (u32 i = 0; i < count; ++i) {
@@ -208,7 +181,7 @@ lua_environment::projectile_view::projectile_view(free_list<projectile_entity>& 
   }
 }
 
-void lua_environment::projectile_view::for_each(sol::function f) {
+void lua_env::projectile_view::for_each(sol::function f) {
   for (u32 item : _items) {
     free_list<projectile_entity>::element elem{*_list, item};
     if (elem.alive()) {
@@ -219,23 +192,13 @@ void lua_environment::projectile_view::for_each(sol::function f) {
 
 } // namespace okuu::stage
 
-#include "package/lua_state.hpp"
-
-#include "stage/stage.hpp"
-
-#include "render.hpp"
-#include "resources.hpp"
-
-#include <shogle/core/allocator.hpp>
-
 namespace stage {
 
 context::context(std::string_view script_path) {
   auto fb_shader = res::get_shader("framebuffer").value();
   _viewport.init(VIEWPORT, VIEWPORT / 2, (vec2)render::win_size() * .5f, fb_shader);
-  _vp_sub = render::vp_subscribe([this](std::size_t w, std::size_t h) {
-    _viewport.update_pos(vec2{w, h} * .5f);
-  });
+  _vp_sub = render::vp_subscribe(
+    [this](std::size_t w, std::size_t h) { _viewport.update_pos(vec2{w, h} * .5f); });
 
   auto stlib = package::stlib_open(_lua);
   _lua_post_open(stlib);
@@ -341,9 +304,7 @@ void context::_lua_post_open(sol::table stlib) {
 
   auto view_type = module.new_usertype<stage::projectile_view>(
     "pview", sol::no_constructor, "make",
-    [this](std::size_t size) {
-      return projectile_view{_projs, size};
-    },
+    [this](std::size_t size) { return projectile_view{_projs, size}; },
     // "pview", sol::call_constructor, sol::constructors<stage::projectile_view(std::size_t)>{},
     "size", &stage::projectile_view::size, "for_each", &stage::projectile_view::for_each);
 }

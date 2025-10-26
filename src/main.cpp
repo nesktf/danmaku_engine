@@ -9,7 +9,10 @@ using namespace ntf::numdefs;
 void engine_run() {
   auto _rh = okuu::render::init();
 
-  auto stage = okuu::stage::lua_environment::load("res/packages/test/main.lua").value();
+  chima::context chima;
+  chima::spritesheet sheet{chima, "res/spritesheet/chara.chima"};
+  auto img = okuu::render::sprite::from_spritesheet(sheet);
+  auto stage = okuu::stage::lua_env::load("res/packages/test/main.lua").value();
 
   float t = 0.f;
   auto loop = ntf::overload{

@@ -148,9 +148,10 @@ public:
   player_entity player;
   std::vector<assets::sprite_atlas> atlas_assets;
   render::stage_viewport _viewport;
+  u32 wait_time;
 };
 
-class lua_environment {
+class lua_env {
 public:
   class projectile_view {
   public:
@@ -168,11 +169,11 @@ public:
   };
 
 public:
-  lua_environment(sol::state&& lua, sol::table lib_table, std::unique_ptr<stage_scene>&& scene);
+  lua_env(sol::state&& lua, sol::table lib_table, std::unique_ptr<stage_scene>&& scene);
 
 public:
-  static expect<lua_environment> load(const std::string& script_path,
-                                      std::unique_ptr<stage_scene>&& scene);
+  static expect<lua_env> load(const std::string& script_path,
+                              std::unique_ptr<stage_scene>&& scene);
 
 public:
   void tick();
