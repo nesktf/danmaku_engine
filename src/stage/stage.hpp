@@ -33,9 +33,17 @@ public:
       return *proj;
     }
 
+    bool alive() const {
+      NTF_ASSERT(_idx < _list->_elems.size());
+      auto& proj = _list->_elems[_idx];
+      return proj.has_value();
+    }
+
     T* operator->() { return &**this; }
 
     const T* operator->() const { return &**this; }
+
+    u32 idx() const { return _idx; }
 
   private:
     ntf::weak_ptr<free_list> _list;
@@ -89,29 +97,41 @@ private:
   std::queue<u32> _free;
 };
 
-class scene {
+class stage_scene {
 public:
   static constexpr size_t MAX_BOSSES = 4u;
 
-  struct scene_objects {
-    scene_objects(player_entity&& player_) :
-        projs{}, bosses{}, boss_count{0u}, player{std::move(player_)} {}
-
-    free_list<projectile_entity> projs;
-    std::array<ntf::nullable<boss_entity>, MAX_BOSSES> bosses;
-    size_t boss_count;
-    player_entity player;
-  };
+public:
+  template<typename T>
+  using idx_elem = std::pair<u32, T>;
 
 public:
-  scene(sol::state&& lua, sol::table lib_table, std::unique_ptr<scene_objects>&& objs,
-        render::stage_viewport&& vp);
+  stage_scene(player_entity&& player_, render::stage_viewport&& viewport) :
+      projs{}, bosses{}, boss_count{0u}, player{std::move(player_)},
+      _viewport{std::move(viewport)} {}
 
 public:
-  static expect<scene> load(const std::string& script_path);
+  ntf::optional<idx_elem<assets::sprite_atlas::sprite>> find_sprite(std::string_view name) const {
+    for (u32 i = 0; const auto& curr : atlas_assets) {
+      auto item = curr.find_sprite(name);
+      if (item) {
+        return {ntf::in_place, i, *item};
+      }
+      ++i;
+    }
+    return {ntf::nullopt};
+  }
 
-public:
-  void tick();
+  ntf::optional<idx_elem<assets::sprite_atlas::animation>> find_anim(std::string_view name) const {
+    for (u32 i = 0; const auto& curr : atlas_assets) {
+      auto item = curr.find_animation(name);
+      if (item) {
+        return {ntf::in_place, i, *item};
+      }
+      ++i;
+    }
+    return {ntf::nullopt};
+  }
 
   // The scene has to render the following (in order):
   // - The background
@@ -120,6 +140,46 @@ public:
   // - The items
   // - The danmaku
   void render(double dt, double alpha);
+
+public:
+  free_list<projectile_entity> projs;
+  std::array<ntf::nullable<boss_entity>, MAX_BOSSES> bosses;
+  size_t boss_count;
+  player_entity player;
+  std::vector<assets::sprite_atlas> atlas_assets;
+  render::stage_viewport _viewport;
+};
+
+class lua_environment {
+public:
+  class projectile_view {
+  public:
+    projectile_view(free_list<projectile_entity>& list, size_t count);
+
+  public:
+    void for_each(sol::function f);
+
+  public:
+    size_t size() const { return _items.size(); }
+
+  private:
+    std::vector<u32> _items;
+    ntf::weak_ptr<free_list<projectile_entity>> _list;
+  };
+
+public:
+  lua_environment(sol::state&& lua, sol::table lib_table, std::unique_ptr<stage_scene>&& scene);
+
+public:
+  static expect<lua_environment> load(const std::string& script_path,
+                                      std::unique_ptr<stage_scene>&& scene);
+
+public:
+  void tick();
+
+  stage_scene& scene() { return *_scene; }
+
+  const stage_scene& scene() const { return *_scene; }
 
 private:
   sol::state _lua;
@@ -130,8 +190,7 @@ private:
   u32 _ticks, _frames;
   u32 _task_time, _task_wait;
 
-  std::unique_ptr<scene_objects> _objects;
-  render::stage_viewport _viewport;
+  std::unique_ptr<stage_scene> _scene;
 };
 
 } // namespace okuu::stage

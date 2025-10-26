@@ -9,7 +9,7 @@ using namespace ntf::numdefs;
 void engine_run() {
   auto _rh = okuu::render::init();
 
-  auto stage = okuu::stage::scene::load("res/packages/test/main.lua").value();
+  auto stage = okuu::stage::lua_environment::load("res/packages/test/main.lua").value();
 
   float t = 0.f;
   auto loop = ntf::overload{

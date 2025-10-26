@@ -64,7 +64,8 @@ constexpr module_pair modules[]{
 constexpr std::size_t module_count = sizeof(modules) / sizeof(module_pair);
 constexpr std::string_view stlib_key = "okuu";
 
-sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<scene::scene_objects> objs) {
+sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<scene_objects> objs,
+                           ntf::weak_cptr<scene_asset_bundle> assets) {
   lua.open_libraries(sol::lib::base, sol::lib::coroutine, sol::lib::package, sol::lib::table,
                      sol::lib::math, sol::lib::string);
 
@@ -77,15 +78,23 @@ sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<scene::scene_objec
     loader(module);
   }
 
+  static constexpr real DT = 1.f / 60.f;
   auto lib_stage = lib["stage"].get_or_create<sol::table>();
   lib_stage.set_function("spawn_boss", [=](float scale, cmplx p0, cmplx p1) {
-    if (objs->boss_count >= scene::MAX_BOSSES) {
+    if (objs->boss_count >= scene_objects::MAX_BOSSES) {
       ntf::logger::warning("Over the boss limit");
       return;
     }
 
+    auto [atlas_idx, sprite] = assets->find_sprite("ball_solid").value();
+    const auto& atlas = assets->atlas[atlas_idx];
+    entity_sprite boss_sprite{atlas, sprite};
+    const vec2 boss_pos{p0.real(), p0.imag()};
+    const auto mov = entity_movement::move_towards({p1.real(), p1.imag()}, DT * vec2{10.f, 10.f},
+                                                   vec2{DT, DT}, .8f);
+
     const u32 boss_idx = objs->boss_count;
-    objs->bosses[boss_idx].emplace();
+    objs->bosses[boss_idx].emplace(0u, boss_pos, boss_sprite);
     objs->boss_count++;
   });
 
@@ -104,15 +113,54 @@ sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<scene::scene_objec
     }
     auto& boss = objs->bosses[boss_idx];
     NTF_ASSERT(boss.has_value());
-    boss->pos(pos);
+    boss->set_movement(entity_movement::move_towards({pos.real(), pos.imag()},
+                                                     DT * vec2{10.f, 10.f}, vec2{DT, DT}, .8f));
   });
+
+  lib_stage.set_function("boss_pos", [=](sol::table args) -> cmplx {
+    if (objs->boss_count == 0) {
+      return {};
+    }
+    const u32 boss_idx = args.get_or<u32>("boss_idx", objs->boss_count - 1); // the last boss
+    if (boss_idx >= objs->boss_count) {
+      return {};
+    }
+    auto& boss = objs->bosses[boss_idx];
+    NTF_ASSERT(boss.has_value());
+    return {boss->pos().x, boss->pos().y};
+  });
+
+  lib_stage.set_function("player_pos", [=]() -> cmplx {
+    return {objs->player.pos().x, objs->player.pos().y};
+  });
+
+  // lib_stage.set_function("cowait", sol::yielding([=](u32 time) { _task_wait = time; }));
+
+  auto mov_type = lib_stage.new_usertype<entity_movement>(
+    "move", sol::no_constructor, "make_linear", +[](sol::table tbl) {
+      const vec2 vel{tbl.get<real>("real"), tbl.get<real>("imag")};
+      return entity_movement::move_linear(vel);
+    });
+
+  auto proj_type = lib_stage.new_usertype<projectile_entity>(
+    "proj", sol::no_constructor, "movement", sol::property(&projectile_entity::set_movement),
+    "angular_speed",
+    sol::property(&projectile_entity::angular_speed, &projectile_entity::set_angular_speed));
+
+  auto view_type = lib_stage.new_usertype<lua_environment::projectile_view>(
+    "pview", sol::no_constructor, "make",
+    [=](size_t size) -> lua_environment::projectile_view {
+
+    },
+    "size", sol::property(&lua_environment::projectile_view::size), "for_each",
+    &lua_environment::projectile_view::for_each);
 
   return lib;
 }
 
 } // namespace
 
-expect<scene> scene::load(const std::string& script_path) {
+expect<lua_environment> lua_environment::load(const std::string& script_path) {
   auto vp = okuu::render::stage_viewport::create(600, 700, 640, 360);
 
   sol::state lua;
@@ -135,18 +183,38 @@ expect<scene> scene::load(const std::string& script_path) {
   auto img = okuu::render::sprite::from_spritesheet(sheet);
 }
 
-scene::scene(sol::state&& lua, sol::table lib_table, std::unique_ptr<scene_objects>&& objs,
-             render::stage_viewport&& vp) :
+lua_environment::lua_environment(sol::state&& lua, sol::table lib_table,
+                                 std::unique_ptr<scene_objects>&& objs,
+                                 render::stage_viewport&& vp) :
     _lua{std::move(lua)},
     _task_thread{sol::thread::create(_lua.lua_state())},
     _task{_task_thread.state(), lib_table["main"].get<sol::function>()}, _objects{std::move(objs)},
     _viewport{std::move(vp)} {}
 
-void scene::render(double dt, double alpha) {
+void lua_environment::render(double dt, double alpha) {
   NTF_UNUSED(alpha);
 
   // img.render(vp);
   // vp.render();
+}
+
+lua_environment::projectile_view::projectile_view(free_list<projectile_entity>& list,
+                                                  size_t count) :
+    _list{list} {
+  _items.reserve(count);
+  for (u32 i = 0; i < count; ++i) {
+    auto elem = list.request_elem();
+    _items.emplace_back(elem.idx());
+  }
+}
+
+void lua_environment::projectile_view::for_each(sol::function f) {
+  for (u32 item : _items) {
+    free_list<projectile_entity>::element elem{*_list, item};
+    if (elem.alive()) {
+      f(*elem);
+    }
+  }
 }
 
 } // namespace okuu::stage

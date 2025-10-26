@@ -7,7 +7,8 @@ sprite_atlas::sprite_atlas(shogle::texture2d&& tex, ntf::unique_array<sprite_uvs
                            std::unordered_map<std::string, u32>&& sprite_map,
                            ntf::unique_array<anim_meta>&& anim_pos,
                            std::unordered_map<std::string, u32>&& anim_map) :
-    _tex{std::move(tex)}, _sprite_uvs{std::move(uvs)}, _sprite_map{std::move(sprite_map)},
+    _tex{std::move(tex)},
+    _sprite_uvs{std::move(uvs)}, _sprite_map{std::move(sprite_map)},
     _anim_pos{std::move(anim_pos)}, _anim_map{std::move(anim_map)} {}
 
 expect<sprite_atlas> sprite_atlas::from_chima(const chima::spritesheet& sheet) {
@@ -33,7 +34,7 @@ expect<sprite_atlas> sprite_atlas::from_chima(const chima::spritesheet& sheet) {
     for (u32 i = 0; const auto& anim : anims) {
       anim_pos[i].start_idx = anim.sprite_idx;
       anim_pos[i].count = anim.sprite_count;
-      anim_pos[i].fps = anim.fps;
+      anim_pos[i].fps = static_cast<u32>(std::round(anim.fps));
 
       std::string name{anim.name.data, anim.name.length};
       [[maybe_unused]] auto [it, empl] = anim_map.try_emplace(std::move(name), i);
@@ -78,10 +79,13 @@ u32 sprite_atlas::anim_length(animation anim) const {
   return _anim_pos[anim_idx].count;
 }
 
-auto sprite_atlas::anim_sprite_at(animation anim, u32 tick, u32 ups) const -> sprite {
+auto sprite_atlas::anim_sprite_at(animation anim, u32 tick) const -> sprite {
   const u32 anim_idx = static_cast<u32>(anim);
   NTF_ASSERT(anim_idx < _anim_pos.size());
   const auto& anim_data = _anim_pos[anim_idx];
+  const u32 frame_idx = anim_data.start_idx + (tick % anim_length(anim));
+  NTF_ASSERT(frame_idx < _sprite_uvs.size());
+  return static_cast<sprite>(frame_idx);
 }
 
 sprite_animator::sprite_animator(const sprite_atlas& atlas, sprite_atlas::animation first_anim) :

@@ -23,7 +23,7 @@ private:
   };
 
   struct anim_meta {
-    f32 fps;
+    u32 fps;
     u32 start_idx;
     u32 count;
   };
@@ -48,7 +48,7 @@ public:
   std::pair<shogle::texture2d_view, sprite_uvs> render_data(sprite spr) const;
 
   u32 anim_length(animation anim) const;
-  sprite anim_sprite_at(animation anim, u32 tick, u32 ups) const;
+  sprite anim_sprite_at(animation anim, u32 tick) const;
 
 private:
   shogle::texture2d _tex;
