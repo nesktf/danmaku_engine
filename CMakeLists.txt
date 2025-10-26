@@ -24,6 +24,16 @@ set(CHIMA_LIB "lib/chimatools")
 list(APPEND LIB_INCLUDE "${CHIMA_LIB}/include")
 list(APPEND LIB_LINK chimatools)
 
+# sol2
+set(SOL2_ENABLE_INSTALL OFF)
+set(SOL2_LUA_VERSION "LuaJIT")
+set(SOL2_BUILD_LUA FALSE)
+set(SOL2_SYSTEM_INCLUDE OFF)
+# set(SOL2_SINGLE ON)
+add_subdirectory("lib/sol2")
+list(APPEND LIB_LINK sol2::sol2)
+list(APPEND LIB_INCLUDE sol2::sol2)
+
 # file(GLOB_RECURSE SOURCE_FILES "src/*.cpp")
 list(APPEND SOURCE_FILES
   src/render/instance.cpp
