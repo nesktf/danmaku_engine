@@ -106,9 +106,7 @@ public:
   using idx_elem = std::pair<u32, T>;
 
 public:
-  stage_scene(player_entity&& player_, render::stage_viewport&& viewport) :
-      projs{}, bosses{}, boss_count{0u}, player{std::move(player_)},
-      _viewport{std::move(viewport)} {}
+  stage_scene(player_entity&& player_, render::stage_viewport&& viewport, shogle::pipeline&& pip);
 
 public:
   ntf::optional<idx_elem<assets::sprite_atlas::sprite>> find_sprite(std::string_view name) const {
@@ -149,6 +147,7 @@ public:
   std::vector<assets::sprite_atlas> atlas_assets;
   render::stage_viewport _viewport;
   u32 wait_time;
+  shogle::pipeline _spr_pip;
 };
 
 class lua_env {
