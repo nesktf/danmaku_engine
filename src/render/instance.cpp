@@ -6,6 +6,8 @@ namespace okuu::render {
 
 namespace {
 
+static constexpr u32 SPRITE_BATCH_SIZE = 1024u;
+
 std::string shogle_to_str(shogle::render_error&& err) {
   return err.what();
 }
@@ -158,18 +160,34 @@ expect<shogle::texture2d> make_missing_albedo(shogle::context_view ctx) {
   return make_tex(ctx, tex_extent, tex_extent, missing_albedo_bitmap<tex_extent>.data());
 }
 
+sprite_renderer make_sprite_renderer(shogle::context_view ctx, u32 instances,
+                                     size_t elem_buffer_sz) {
+  return make_buffer(ctx, shogle::buffer_type::shader_storage, instances * elem_buffer_sz, nullptr)
+    .transform([](shogle::buffer&& buff) {
+      return shogle::to_typed<shogle::buffer_type::shader_storage>(std::move(buff));
+    })
+    .and_then([=](shogle::shader_storage_buffer&& ssbo) -> expect<sprite_renderer> {
+      auto quad = shogle::quad_mesh::create(ctx);
+      if (!quad) {
+        return {ntf::unexpect, shogle_to_str(std::move(quad.error()))};
+      }
+      return {ntf::in_place, instances, std::move(ssbo), std::move(*quad)};
+    })
+    .value();
+}
+
 } // namespace
 
 ntf::nullable<okuu_render_ctx> g_renderer;
 
 okuu_render_ctx::okuu_render_ctx(shogle::window&& win_, shogle::context&& ctx_,
-                                 shader_data&& shaders_, shogle::quad_mesh&& quad_,
+                                 shader_data&& shaders_, sprite_renderer&& sprite_ren_,
                                  shogle::pipeline&& stage_pip_, shogle::texture2d&& base_fb_tex_,
                                  shogle::framebuffer&& base_fb_, shogle::pipeline&& back_pip_) :
     win{std::move(win_)}, ctx{std::move(ctx_)}, shaders{std::move(shaders_)},
-    quad{std::move(quad_)}, stage_pip{std::move(stage_pip_)}, base_fb_tex{std::move(base_fb_tex_)},
-    base_fb{std::move(base_fb_)}, back_pip{std::move(back_pip_)},
-    missing_tex{make_missing_albedo<4>(ctx).value()} {}
+    sprite_ren{std::move(sprite_ren_)}, stage_pip{std::move(stage_pip_)},
+    base_fb_tex{std::move(base_fb_tex_)}, base_fb{std::move(base_fb_)},
+    back_pip{std::move(back_pip_)}, missing_tex{make_missing_albedo<4>(ctx).value()} {}
 
 [[nodiscard]] singleton_handle init() {
   const u32 win_width = 1280;
@@ -216,7 +234,6 @@ okuu_render_ctx::okuu_render_ctx(shogle::window&& win_, shogle::context&& ctx_,
 
   auto sprite_vert_shader = shogle::vertex_shader::create(ctx, {vert_sprite}).value();
   auto sprite_frag_shader = shogle::fragment_shader::create(ctx, {frag_sprite}).value();
-  auto quad = shogle::quad_mesh::create(ctx).value();
 
   auto vert_fbo_shader = shogle::vertex_shader::create(ctx, {vert_fbo}).value();
   auto frag_fbo_shader = shogle::fragment_shader::create(ctx, {frag_fbo}).value();
@@ -230,12 +247,14 @@ okuu_render_ctx::okuu_render_ctx(shogle::window&& win_, shogle::context&& ctx_,
 
   auto [fb_tex, fb] = make_fb(ctx, 1280, 720).value();
 
+  auto sprite_ren = make_sprite_renderer(ctx, SPRITE_BATCH_SIZE, sizeof(sprite_shader_data));
+
   g_renderer.emplace(std::move(win), std::move(ctx),
                      shader_data{
                        .vert_sprite_generic = std::move(sprite_vert_shader),
                        .frag_sprite_generic = std::move(sprite_frag_shader),
                      },
-                     std::move(quad), std::move(pip_vp), std::move(fb_tex), std::move(fb),
+                     std::move(sprite_ren), std::move(pip_vp), std::move(fb_tex), std::move(fb),
                      std::move(pip_back));
   NTF_ASSERT(g_renderer.has_value());
   g_renderer->win.set_viewport_callback([](auto&, uvec2 vp) {
@@ -264,11 +283,6 @@ singleton_handle::~singleton_handle() noexcept {
 shogle::window& window() {
   NTF_ASSERT(g_renderer.has_value());
   return g_renderer->win;
-}
-
-shogle::context_view shogle_ctx() {
-  NTF_ASSERT(g_renderer.has_value());
-  return g_renderer->ctx;
 }
 
 expect<shogle::pipeline> create_pipeline(std::string_view frag_src, pipeline_attrib attrib) {
@@ -336,7 +350,7 @@ void render_back(float t) {
   g_renderer->ctx.submit_render_command({
     .target = fb,
     .pipeline = pip,
-    .buffers = g_renderer->quad.bindings(),
+    .buffers = g_renderer->sprite_ren.quad().bindings(),
     .textures = {tbind},
     .consts = unifs,
     .opts =
@@ -351,250 +365,110 @@ void render_back(float t) {
   });
 }
 
-} // namespace okuu::render
+void sprite_renderer::enqueue_sprite(const sprite_render_data& sprite_data) {
+  NTF_ASSERT(_sprite_instance_num < _max_instances);
+  auto transform = shogle::transform2d<f32>{}
+                     .pos(sprite_data.position)
+                     .scale(sprite_data.scale)
+                     .roll(sprite_data.rotation);
 
-// #include "global.hpp"
-// #include "render.hpp"
-// #include "ui/frontend.hpp"
-//
-// #include <shogle/engine.hpp>
-//
-// #include <shogle/scene/camera.hpp>
-//
-// namespace {
-//
-// class sprite_renderer {
-// public:
-//   void init(res::shader shader);
-//
-//   void draw(res::sprite sprite, const color4& color, const mat4& model, const mat4& proj,
-//             const mat4& view) const;
-//
-// private:
-//   res::shader _shader;
-//   render::uniform _proj_u, _view_u, _model_u;
-//   render::uniform _offset_u, _color_u, _sampler_u;
-// };
-//
-// void sprite_renderer::init(res::shader shader) {
-//   _shader = shader;
-//
-//   _shader->uniform_location(_proj_u, "proj");
-//   _shader->uniform_location(_view_u, "view");
-//   _shader->uniform_location(_model_u, "model");
-//   _shader->uniform_location(_offset_u, "offset");
-//   _shader->uniform_location(_color_u, "sprite_color");
-//   _shader->uniform_location(_sampler_u, "sprite_sampler");
-// }
-//
-// void sprite_renderer::draw(res::sprite sprite, const color4& color, const mat4& model,
-//                            const mat4& proj, const mat4& view) const {
-//   const auto [atlas, index] = sprite;
-//   const auto sprite_sampler = 0;
-//
-//   _shader->use();
-//   _shader->set_uniform(_proj_u, proj);
-//   _shader->set_uniform(_view_u, view);
-//   _shader->set_uniform(_model_u, model);
-//   _shader->set_uniform(_offset_u, atlas->at(index).offset);
-//   _shader->set_uniform(_color_u, color);
-//
-//   _shader->set_uniform(_sampler_u, (int)sprite_sampler);
-//   atlas->texture().bind_sampler((size_t)sprite_sampler);
-//
-//   renderer::draw_quad();
-// }
-//
-// struct {
-//   render::ui_renderer ui;
-//   // render::stage_viewport stage;
-//   sprite_renderer sprite;
-//
-//   mat4 win_proj;
-//   ivec2 win_size;
-//
-//   render::viewport_event vp_event;
-// } r;
-//
-// } // namespace
-//
-// namespace render {
-//
-// void destroy() {
-//   r.vp_event.clear();
-// }
-//
-// void init(ntf::glfw::window<renderer>& window) {
-//   // Load OpenGL and things
-//   renderer::set_blending(true);
-//
-//   window.set_viewport_event([](size_t w, size_t h) {
-//     renderer::set_viewport(w, h);
-//     r.win_size = ivec2{w, h};
-//     r.win_proj = glm::ortho(0.f, (float)w, (float)h, 0.f, -10.f, 1.f);
-//
-//     r.vp_event.fire(w, h);
-//   });
-// }
-//
-// void post_init(ntf::glfw::window<renderer>& win) {
-//   // Prepare shaders and things
-//   auto sprite_shader = res::get_shader("sprite");
-//   auto front_shader = res::get_shader("frontend");
-//
-//   auto vp = win.size();
-//
-//   r.win_size = vp;
-//   r.win_proj = glm::ortho(0.f, (float)vp.x, (float)vp.y, 0.f, -10.f, 1.f);
-//   r.ui.init(vp, front_shader.value());
-//   r.sprite.init(sprite_shader.value());
-// }
-//
-// void draw_background(double dt) {
-//   const auto& back = res::texture{0}.get();
-//   r.ui.tick(dt);
-//   r.ui.draw(back, r.win_proj);
-// }
-//
-// void draw_frontend(double dt) {
-//   // TODO: Move this thing to a widget class
-//   render::draw_background(dt);
-//
-//   const auto& font = res::get_font("arial")->get();
-//   const auto& font_shader = res::get_shader("font")->get();
-//
-//   auto& menu = frontend::instance().entry();
-//   render::draw_sprite(menu.background, menu.back_transform.mat(), r.win_proj, mat4{1.f});
-//
-//   for (size_t i = 0; i < menu.entries.size(); ++i) {
-//     const auto focused_index = menu.focused;
-//     color4 col{1.0f};
-//     if (i == focused_index) {
-//       col = color4{1.0f, 0.0f, 0.0f, 1.0f};
-//     }
-//
-//     ntf::transform2d font_transform;
-//     const vec2 pos{100.0f, i * 50.0f + 200.0f};
-//     font_transform.pos(pos);
-//
-//     const auto shader_sampler = 0;
-//
-//     font_shader.use();
-//     font_shader.set_uniform("proj", r.win_proj);
-//     font_shader.set_uniform("model", font_transform.mat());
-//     font_shader.set_uniform("text_color", col);
-//     font_shader.set_uniform("tex", (int)shader_sampler);
-//     font.draw_text(vec2{0.f, 0.f}, 1.f, menu.entries[i].text);
-//   }
-// }
-//
-// void draw_text(std::string_view text, color4 color, const mat4& mod) {
-//   const auto font = res::get_font("arial").value();
-//   const auto font_shader = res::get_shader("font").value();
-//   const auto shader_sampler = 0;
-//
-//   font_shader->use();
-//   font_shader->set_uniform("proj", r.win_proj);
-//   font_shader->set_uniform("model", mod);
-//   font_shader->set_uniform("text_color", color);
-//   font_shader->set_uniform("tex", (int)shader_sampler);
-//   font->draw_text(vec2{0.f}, 1.f, text);
-// }
-//
-// void clear_viewport() {
-//   renderer::clear_viewport(color3{.3f});
-// }
-//
-// void draw_sprite(res::sprite sprite, const mat4& mod, const mat4& proj, const mat4& view) {
-//   r.sprite.draw(sprite, color4{1.f}, mod, proj, view);
-// }
-//
-// ivec2 win_size() {
-//   return r.win_size;
-// }
-//
-// const mat4& win_proj() {
-//   return r.win_proj;
-// }
-//
-// viewport_event::subscription vp_subscribe(viewport_event::callback callback) {
-//   return r.vp_event.subscribe(callback);
-// }
-//
-// void vp_unsuscribe(viewport_event::subscription sub) {
-//   r.vp_event.unsubscribe(sub);
-// }
-//
-// void ui_renderer::init(ivec2 win_size, res::shader shader) {
-//   _shader = shader;
-//
-//   _shader->uniform_location(_proj_u, "proj");
-//   _shader->uniform_location(_model_u, "model");
-//   _shader->uniform_location(_time_u, "time");
-//   _shader->uniform_location(_sampler_u, "tex");
-//
-//   _ui_root.pos((vec2)win_size * .5f).scale(win_size);
-// }
-//
-// void ui_renderer::tick(double dt) {
-//   _back_time += dt;
-// }
-//
-// void ui_renderer::draw(const renderer::texture2d& tex, const mat4& win_proj) {
-//   const auto sampler = 0;
-//
-//   _shader->use();
-//   _shader->set_uniform(_proj_u, win_proj);
-//   _shader->set_uniform(_model_u, _ui_root.mat());
-//   _shader->set_uniform(_time_u, _back_time);
-//
-//   _shader->set_uniform(_sampler_u, (int)sampler);
-//   tex.bind_sampler((size_t)sampler);
-//
-//   renderer::draw_quad();
-// }
-//
-// void stage_viewport::init(ivec2 vp_size, ivec2 center, vec2 pos, res::shader shader) {
-//   _shader = shader;
-//   shader->uniform_location(_proj_u, "proj");
-//   shader->uniform_location(_view_u, "view");
-//   shader->uniform_location(_model_u, "model");
-//   shader->uniform_location(_sampler_u, "fb_sampler");
-//
-//   update_viewport(vp_size, center);
-//   update_pos(pos);
-// }
-//
-// void stage_viewport::destroy() {
-//   _viewport = renderer::framebuffer{};
-// }
-//
-// void stage_viewport::draw(const mat4& win_proj) {
-//   assert(_viewport.valid());
-//   const auto sampler = 0;
-//
-//   _shader->use();
-//
-//   _shader->set_uniform(_proj_u, win_proj);
-//   _shader->set_uniform(_view_u, mat4{1.f});
-//   _shader->set_uniform(_model_u, _transform.mat());
-//
-//   _shader->set_uniform(_sampler_u, (int)sampler);
-//   _viewport.tex().bind_sampler((size_t)sampler);
-//
-//   renderer::draw_quad();
-// }
-//
-// void stage_viewport::update_viewport(ivec2 vp_size, ivec2 center) {
-//   _cam_center = center;
-//   _viewport = renderer::framebuffer{vp_size};
-//   _proj = glm::ortho(0.f, (float)vp_size.x, (float)vp_size.y, 0.f, -10.f, 1.f);
-//   _view = ntf::camera2d::build_view((vec2)_viewport.size() * .5f, _cam_center, vec2{1.f}, 0.f);
-//   _transform.scale((vec2)vp_size);
-// }
-//
-// void stage_viewport::update_pos(vec2 pos) {
-//   _transform.pos(pos);
-// }
-//
-// } // namespace render
+  i32 samplers[SHADER_SAMPLER_COUNT]{0};
+  {
+    u32 i = 0;
+    for (; i < _active_texes; ++i) {
+      auto& tex = _texes[i];
+      if (tex.texture == sprite_data.texture.get()) {
+        samplers[0] = i;
+      }
+    }
+    if (i == _active_texes) {
+    }
+  }
+
+  const sprite_shader_data shader_data{
+    .transform = transform.world(),
+    .samplers = {samplers[0], samplers[1], samplers[2], samplers[3]},
+    .ticks = static_cast<i32>(sprite_data.ticks),
+    .uv_lin_x = sprite_data.uv_lin.x,
+    .uv_lin_y = sprite_data.uv_lin.y,
+    .uv_con_x = sprite_data.uv_con.x,
+    .uv_con_y = sprite_data.uv_con.y,
+  };
+
+  _buffer.upload(shader_data, _sprite_instance_num * sizeof(shader_data));
+  ++_sprite_instance_num;
+}
+
+void sprite_renderer::render() {
+  _sprite_instance_num = 0u;
+
+  const shogle::shader_binding buff_bind{
+    .buffer = _buffer,
+    .binding = 0,
+    .size = _buffer.size(),
+    .offset = 0u,
+  };
+
+  g_renderer->ctx.submit_render_command({
+    .target = {},
+    .pipeline = {},
+    .buffers = _quad.bindings({buff_bind}),
+    .textures = {_texes.data(), _active_texes},
+    .consts = {},
+    .opts =
+      {
+        .vertex_count = 6,
+        .vertex_offset = 0,
+        .index_offset = 0,
+        .instances = _sprite_instance_num,
+      },
+    .sort_group = 0,
+    .render_callback = {},
+  });
+
+  // Reset textures
+  std::memset(_texes.data(), 0, _texes.size());
+}
+
+void render_sprites(const std::vector<sprite_render_data>& sprites) {
+  auto& cbs = g_renderer->render_cbs;
+
+  cbs.clear();
+  cbs.reserve(sprites.size());
+
+  for (u32 i = 0; const auto& sprite : sprites) {
+    cbs.emplace_back([&sprite](shogle::context_view) {
+      std::invoke(sprite.on_render_buffer_write, sprite.buffer);
+    });
+
+    const shogle::shader_binding buff_bind{
+      .buffer = sprite.buffer,
+      .binding = 0,
+      .size = sprite.buffer.size(),
+      .offset = 0u,
+    };
+    const shogle::texture_binding tex_bind{
+      .texture = sprite.texture,
+      .sampler = 0,
+    };
+    g_renderer->ctx.submit_render_command({
+      .target = sprite.target,
+      .pipeline = sprite.pipeline,
+      .buffers = g_renderer->sprite_ren.quad().bindings({buff_bind}),
+      .textures = {tex_bind},
+      .consts = {},
+      .opts =
+        {
+          .vertex_count = 6,
+          .vertex_offset = 0,
+          .index_offset = 0,
+          .instances = 0,
+        },
+      .sort_group = 0,
+      .render_callback = {cbs[i]},
+    });
+    ++i;
+  }
+}
+
+} // namespace okuu::render

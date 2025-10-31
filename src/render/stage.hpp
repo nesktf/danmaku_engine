@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../assets/chima.hpp"
 #include "./common.hpp"
 
 namespace okuu::render {
@@ -55,31 +54,20 @@ private:
   stage_uniforms _unif;
 };
 
-class sprite {
-public:
-  sprite(shogle::texture2d&& tex);
+static constexpr size_t MAX_SPRITE_AUX_TEX = 3u;
 
-public:
-  static sprite from_spritesheet(const chima::spritesheet& sheet);
-
-public:
-  void render(stage_viewport& vp);
-
-private:
-  shogle::texture2d _tex;
+struct sprite_render_data {
+  ntf::weak_cptr<stage_viewport> viewport;
+  shogle::texture2d_view texture;
+  std::array<shogle::texture2d_view, MAX_SPRITE_AUX_TEX> extra_texs;
+  u32 ticks;
+  vec2 position;
+  vec2 scale;
+  f32 rotation;
+  vec2 uv_lin;
+  vec2 uv_con;
 };
 
-struct sprite_command {
-  ntf::weak_cptr<shogle::pipeline> pipeline;
-  ntf::weak_cptr<shogle::texture2d> texture;
-  ntf::nullable<shogle::shader_binding> ssbo_bind;
-};
-
-struct ui_element {
-  virtual ~ui_element() = default;
-  virtual void render_commands(std::vector<sprite_command>& cmds);
-};
-
-void render_sprites(stage_viewport& stage, std::vector<sprite_command>& cmds);
+void render_sprite(const sprite_render_data& sprite);
 
 } // namespace okuu::render

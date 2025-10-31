@@ -31,8 +31,6 @@ struct singleton_handle {
 
 shogle::window& window();
 
-shogle::context_view shogle_ctx();
-
 void render_back(float t);
 
 expect<shogle::texture2d> create_texture(u32 width, u32 height, const void* data);
@@ -47,5 +45,15 @@ enum class pipeline_attrib {
 expect<shogle::pipeline> create_pipeline(std::string_view frag_src, pipeline_attrib attrib);
 
 expect<shogle::shader_storage_buffer> create_ssbo(size_t size, const void* data = nullptr);
+
+// struct sprite_render_data {
+//   shogle::framebuffer_view target;
+//   shogle::pipeline_view pipeline;
+//   shogle::texture2d_view texture;
+//   shogle::shader_storage_buffer buffer;
+//   ntf::inplace_function<void(shogle::shader_storage_buffer_view) const> on_render_buffer_write;
+//   mat4 proj;
+//   mat4 view;
+// };
 
 } // namespace okuu::render
