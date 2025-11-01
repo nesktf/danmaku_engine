@@ -6,68 +6,91 @@ namespace okuu::render {
 
 class stage_viewport {
 private:
-  struct stage_uniforms {
-    mat4 proj;
-    mat4 view;
-  };
-
   static constexpr f32 DEFAULT_ASPECT = 6.f / 7.f;
   static constexpr uvec2 DEFAULT_SIZE{600, 700};
 
 public:
-  stage_viewport(shogle::texture2d&& fb_tex, shogle::framebuffer&& fb, shogle::pipeline&& pip,
-                 shogle::shader_storage_buffer&& ssbo, u32 xpos, u32 ypos);
+  stage_viewport(u32 width, u32 height, u32 xpos, u32 ypos, shogle::texture2d&& fb_tex,
+                 shogle::framebuffer&& fb);
 
 public:
-  static stage_viewport create(u32 width, u32 height, u32 xpos, u32 ypos);
+  static expect<stage_viewport> create(u32 width, u32 height, u32 xpos, u32 ypos);
 
 public:
-  void render();
+  shogle::framebuffer_view framebuffer() const { return {_fb}; }
 
-  const shogle::framebuffer& framebuffer() const { return _fb; }
+  shogle::texture_binding tex_binds(u32 sampler) const;
 
-  const shogle::shader_storage_buffer& ssbo() const { return _ssbo; }
+  std::pair<u32, u32> extent() const;
 
-  const shogle::shader_binding binds() const {
-    return {
-      .buffer = _ssbo,
-      .binding = 1,
-      .size = _ssbo.size(),
-      .offset = 0,
-    };
-  }
+  std::pair<u32, u32> pos() const;
 
-  std::pair<u32, u32> extent() const {
-    auto ext = _fb_tex.extent();
-    return std::make_pair(ext.x, ext.y);
-  }
+  mat4 transform() const;
+  mat4 proj() const;
+  mat4 view() const;
 
 private:
   shogle::texture2d _fb_tex;
   shogle::framebuffer _fb;
-  shogle::pipeline _pip;
-  shogle::shader_storage_buffer _ssbo;
-
-  // The stage viewport works with screen space coordinates
-  // Each pixel should map 1:1 to the window viewport
+  u32 _width, _height;
   u32 _xpos, _ypos;
-  stage_uniforms _unif;
 };
 
-static constexpr size_t MAX_SPRITE_AUX_TEX = 3u;
-
-struct sprite_render_data {
-  ntf::weak_cptr<stage_viewport> viewport;
-  shogle::texture2d_view texture;
-  std::array<shogle::texture2d_view, MAX_SPRITE_AUX_TEX> extra_texs;
-  u32 ticks;
-  vec2 position;
-  vec2 scale;
-  f32 rotation;
-  vec2 uv_lin;
-  vec2 uv_con;
+struct sprite_uvs {
+  f32 x_lin, x_con;
+  f32 y_lin, y_con;
 };
 
-void render_sprite(const sprite_render_data& sprite);
+class stage_renderer {
+public:
+  static constexpr size_t MAX_SHADER_SAMPLERS = 8u;
+
+  struct sprite_shader_data {
+    mat4 transform;
+    mat4 view;
+    mat4 proj;
+    i32 sampler;
+    i32 ticks;
+    f32 uv_lin_x;
+    f32 uv_lin_y;
+    f32 uv_con_x;
+    f32 uv_con_y;
+  };
+
+  struct sprite_render_data {
+    mat4 transform;
+    shogle::texture2d_view texture;
+    u32 ticks;
+    sprite_uvs uvs;
+  };
+
+public:
+  stage_renderer(u32 instances, stage_viewport&& viewport,
+                 shogle::shader_storage_buffer&& sprite_buffer);
+
+public:
+  stage_viewport& viewport() { return _viewport; }
+
+  ntf::cspan<shogle::texture_binding> tex_binds() const;
+  ntf::cspan<shogle::shader_binding> shader_binds() const;
+
+public:
+  u32 sprite_instances() const { return _sprite_instances; }
+
+  void reset_instances();
+  void enqueue_sprite(const sprite_render_data& sprite_data);
+
+private:
+  stage_viewport _viewport;
+  shogle::shader_storage_buffer _sprite_buffer;
+  std::array<shogle::texture_binding, MAX_SHADER_SAMPLERS> _tex_binds;
+  shogle::shader_binding _sprite_buffer_binds;
+  u32 _active_texes;
+  u32 _max_instances;
+  u32 _sprite_instances;
+};
+
+void render_stage(stage_renderer& stage);
+void render_viewport(stage_viewport& viewport, shogle::framebuffer_view target);
 
 } // namespace okuu::render

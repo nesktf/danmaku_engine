@@ -1,6 +1,6 @@
 #include "./stage.hpp"
 
-#include "../render/instance.hpp"
+#include "../render/stage.hpp"
 #include <ntfstl/logger.hpp>
 
 namespace okuu::stage {
@@ -113,9 +113,8 @@ sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<stage_scene> scene
     return {boss->pos().x, boss->pos().y};
   });
 
-  lib_stage.set_function("player_pos", [=]() -> cmplx {
-    return {scene->player.pos().x, scene->player.pos().y};
-  });
+  lib_stage.set_function(
+    "player_pos", [=]() -> cmplx { return {scene->player.pos().x, scene->player.pos().y}; });
 
   lib_stage.set_function("cowait", sol::yielding([=](u32 time) { scene->wait_time = time; }));
 
@@ -143,65 +142,72 @@ sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<stage_scene> scene
 
 } // namespace
 
-stage_scene::stage_scene(player_entity&& player_, render::stage_viewport&& viewport,
-                         shogle::pipeline&& srp_pip) :
-    projs{},
-    bosses{}, boss_count{0u}, player{std::move(player_)}, _viewport{std::move(viewport)},
-    _spr_pip{std::move(srp_pip)} {}
+stage_scene::stage_scene(player_entity&& player_, render::stage_renderer&& renderer_) :
+    projs{}, bosses{}, boss_count{0u}, player{std::move(player_)}, atlas_assets{},
+    renderer{std::move(renderer_)}, task_wait_ticks{0u}, ticks{0u} {}
+
+auto stage_scene::find_sprite(std::string_view name) const
+  -> ntf::optional<idx_elem<assets::sprite_atlas::sprite>> {
+
+  for (u32 i = 0; const auto& curr : atlas_assets) {
+    auto item = curr.find_sprite(name);
+    if (item) {
+      return {ntf::in_place, i, *item};
+    }
+    ++i;
+  }
+  return {ntf::nullopt};
+}
+
+auto stage_scene::find_anim(std::string_view name) const
+  -> ntf::optional<idx_elem<assets::sprite_atlas::animation>> {
+
+  for (u32 i = 0; const auto& curr : atlas_assets) {
+    auto item = curr.find_animation(name);
+    if (item) {
+      return {ntf::in_place, i, *item};
+    }
+    ++i;
+  }
+  return {ntf::nullopt};
+}
 
 void stage_scene::render(double dt, double alpha) {
+  // The scene has to render the following (in order):
+  // - The background
+  // - The boss(es)
+  // - The player
+  // - The items
+  // - The danmaku
   NTF_UNUSED(dt);
   NTF_UNUSED(alpha);
+
+  const auto render_sprite = [&](auto& entity) {
+    const auto [atlas, idx] = entity.sprite();
+    const auto [tex, uvs] = atlas->render_data(idx);
+    this->renderer.enqueue_sprite({
+      .transform = entity.transform(),
+      .texture = tex,
+      .ticks = this->ticks,
+      .uvs = uvs,
+    });
+  };
+
+  for (u32 i = 0; i < this->boss_count; ++i) {
+    const auto& boss = bosses[i];
+    NTF_ASSERT(boss.has_value());
+    render_sprite(*boss);
+  }
+
+  render_sprite(player);
 
   const auto proj_span = projs.elems();
   for (const auto& proj : proj_span) {
     if (!proj.has_value()) {
       continue;
     }
-    const auto transform = proj->transform();
-    const auto [atlas, idx] = proj->sprite();
-    const auto [tex, uvs] = atlas->render_data(idx);
-
-    const shogle::texture_binding tbind{
-      .texture = tex,
-      .sampler = 0,
-    };
-
-    auto loc_proj = _spr_pip.uniform_location("proj").value();
-    auto loc_view = _spr_pip.uniform_location("view").value();
-    auto loc_model = _spr_pip.uniform_location("model").value();
-    auto loc_sampler = _spr_pip.uniform_location("tex").value();
-
-    const auto [vpw, vph] = _viewport.extent();
-    const auto proj_mat = glm::ortho(0.f, (f32)vpw, (f32)vph, 0.f, -10.f, 1.f);
-
-    const shogle::uniform_const unifs[] = {
-      shogle::format_uniform_const(loc_model, transform),
-      shogle::format_uniform_const(loc_proj, proj_mat),
-      shogle::format_uniform_const(loc_view, mat4{1.f}),
-      shogle::format_uniform_const(loc_sampler, 0),
-    };
-
-    const shogle::render_cmd proj_cmd{
-      .target = _viewport.framebuffer(),
-      .pipeline = _spr_pip,
-      .buffers = render::g_renderer->quad.bindings(),
-      .textures = {tbind},
-      .consts = unifs,
-      .opts =
-        {
-          .vertex_count = 6,
-          .vertex_offset = 0,
-          .index_offset = 0,
-          .instances = 0,
-        },
-      .sort_group = 0,
-      .render_callback = {},
-    };
-    render::g_renderer->ctx.submit_render_command(proj_cmd);
+    render_sprite(*proj);
   }
-
-  _viewport.render();
 }
 
 expect<lua_env> lua_env::load(const std::string& script_path,
@@ -253,9 +259,8 @@ namespace stage {
 context::context(std::string_view script_path) {
   auto fb_shader = res::get_shader("framebuffer").value();
   _viewport.init(VIEWPORT, VIEWPORT / 2, (vec2)render::win_size() * .5f, fb_shader);
-  _vp_sub = render::vp_subscribe([this](std::size_t w, std::size_t h) {
-    _viewport.update_pos(vec2{w, h} * .5f);
-  });
+  _vp_sub = render::vp_subscribe(
+    [this](std::size_t w, std::size_t h) { _viewport.update_pos(vec2{w, h} * .5f); });
 
   auto stlib = package::stlib_open(_lua);
   _lua_post_open(stlib);
@@ -361,9 +366,7 @@ void context::_lua_post_open(sol::table stlib) {
 
   auto view_type = module.new_usertype<stage::projectile_view>(
     "pview", sol::no_constructor, "make",
-    [this](std::size_t size) {
-      return projectile_view{_projs, size};
-    },
+    [this](std::size_t size) { return projectile_view{_projs, size}; },
     // "pview", sol::call_constructor, sol::constructors<stage::projectile_view(std::size_t)>{},
     "size", &stage::projectile_view::size, "for_each", &stage::projectile_view::for_each);
 }

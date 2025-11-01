@@ -160,13 +160,13 @@ expect<shogle::texture2d> make_missing_albedo(shogle::context_view ctx) {
   return make_tex(ctx, tex_extent, tex_extent, missing_albedo_bitmap<tex_extent>.data());
 }
 
-sprite_renderer make_sprite_renderer(shogle::context_view ctx, u32 instances,
-                                     size_t elem_buffer_sz) {
+stage_renderer make_sprite_renderer(shogle::context_view ctx, u32 instances,
+                                    size_t elem_buffer_sz) {
   return make_buffer(ctx, shogle::buffer_type::shader_storage, instances * elem_buffer_sz, nullptr)
     .transform([](shogle::buffer&& buff) {
       return shogle::to_typed<shogle::buffer_type::shader_storage>(std::move(buff));
     })
-    .and_then([=](shogle::shader_storage_buffer&& ssbo) -> expect<sprite_renderer> {
+    .and_then([=](shogle::shader_storage_buffer&& ssbo) -> expect<stage_renderer> {
       auto quad = shogle::quad_mesh::create(ctx);
       if (!quad) {
         return {ntf::unexpect, shogle_to_str(std::move(quad.error()))};
@@ -181,7 +181,7 @@ sprite_renderer make_sprite_renderer(shogle::context_view ctx, u32 instances,
 ntf::nullable<okuu_render_ctx> g_renderer;
 
 okuu_render_ctx::okuu_render_ctx(shogle::window&& win_, shogle::context&& ctx_,
-                                 shader_data&& shaders_, sprite_renderer&& sprite_ren_,
+                                 shader_data&& shaders_, stage_renderer&& sprite_ren_,
                                  shogle::pipeline&& stage_pip_, shogle::texture2d&& base_fb_tex_,
                                  shogle::framebuffer&& base_fb_, shogle::pipeline&& back_pip_) :
     win{std::move(win_)}, ctx{std::move(ctx_)}, shaders{std::move(shaders_)},
@@ -363,112 +363,6 @@ void render_back(float t) {
     .sort_group = 0,
     .render_callback = {},
   });
-}
-
-void sprite_renderer::enqueue_sprite(const sprite_render_data& sprite_data) {
-  NTF_ASSERT(_sprite_instance_num < _max_instances);
-  auto transform = shogle::transform2d<f32>{}
-                     .pos(sprite_data.position)
-                     .scale(sprite_data.scale)
-                     .roll(sprite_data.rotation);
-
-  i32 samplers[SHADER_SAMPLER_COUNT]{0};
-  {
-    u32 i = 0;
-    for (; i < _active_texes; ++i) {
-      auto& tex = _texes[i];
-      if (tex.texture == sprite_data.texture.get()) {
-        samplers[0] = i;
-      }
-    }
-    if (i == _active_texes) {
-    }
-  }
-
-  const sprite_shader_data shader_data{
-    .transform = transform.world(),
-    .samplers = {samplers[0], samplers[1], samplers[2], samplers[3]},
-    .ticks = static_cast<i32>(sprite_data.ticks),
-    .uv_lin_x = sprite_data.uv_lin.x,
-    .uv_lin_y = sprite_data.uv_lin.y,
-    .uv_con_x = sprite_data.uv_con.x,
-    .uv_con_y = sprite_data.uv_con.y,
-  };
-
-  _buffer.upload(shader_data, _sprite_instance_num * sizeof(shader_data));
-  ++_sprite_instance_num;
-}
-
-void sprite_renderer::render() {
-  _sprite_instance_num = 0u;
-
-  const shogle::shader_binding buff_bind{
-    .buffer = _buffer,
-    .binding = 0,
-    .size = _buffer.size(),
-    .offset = 0u,
-  };
-
-  g_renderer->ctx.submit_render_command({
-    .target = {},
-    .pipeline = {},
-    .buffers = _quad.bindings({buff_bind}),
-    .textures = {_texes.data(), _active_texes},
-    .consts = {},
-    .opts =
-      {
-        .vertex_count = 6,
-        .vertex_offset = 0,
-        .index_offset = 0,
-        .instances = _sprite_instance_num,
-      },
-    .sort_group = 0,
-    .render_callback = {},
-  });
-
-  // Reset textures
-  std::memset(_texes.data(), 0, _texes.size());
-}
-
-void render_sprites(const std::vector<sprite_render_data>& sprites) {
-  auto& cbs = g_renderer->render_cbs;
-
-  cbs.clear();
-  cbs.reserve(sprites.size());
-
-  for (u32 i = 0; const auto& sprite : sprites) {
-    cbs.emplace_back([&sprite](shogle::context_view) {
-      std::invoke(sprite.on_render_buffer_write, sprite.buffer);
-    });
-
-    const shogle::shader_binding buff_bind{
-      .buffer = sprite.buffer,
-      .binding = 0,
-      .size = sprite.buffer.size(),
-      .offset = 0u,
-    };
-    const shogle::texture_binding tex_bind{
-      .texture = sprite.texture,
-      .sampler = 0,
-    };
-    g_renderer->ctx.submit_render_command({
-      .target = sprite.target,
-      .pipeline = sprite.pipeline,
-      .buffers = g_renderer->sprite_ren.quad().bindings({buff_bind}),
-      .textures = {tex_bind},
-      .consts = {},
-      .opts =
-        {
-          .vertex_count = 6,
-          .vertex_offset = 0,
-          .index_offset = 0,
-          .instances = 0,
-        },
-      .sort_group = 0,
-      .render_callback = {cbs[i]},
-    });
-    ++i;
-  }
 }
 
 } // namespace okuu::render
