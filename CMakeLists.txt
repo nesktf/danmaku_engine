@@ -39,6 +39,7 @@ list(APPEND SOURCE_FILES
   src/render/instance.cpp
   src/render/stage.cpp
   src/stage/entity.cpp
+  src/stage/stage.cpp
   src/assets/sprite.cpp
   src/main.cpp
 )

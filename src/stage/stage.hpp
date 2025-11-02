@@ -59,8 +59,7 @@ public:
   lua_env(sol::state&& lua, sol::table lib_table, std::unique_ptr<stage_scene>&& scene);
 
 public:
-  static expect<lua_env> load(const std::string& script_path,
-                              std::unique_ptr<stage_scene>&& scene);
+  static expect<lua_env> load(const std::string& script_path, const assets::sprite_atlas& atlas);
 
 public:
   void tick();

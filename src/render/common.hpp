@@ -22,6 +22,7 @@ struct singleton_handle {
 [[nodiscard]] singleton_handle init();
 
 shogle::window& window();
+shogle::context_view shogle_ctx();
 
 void render_back(float t);
 

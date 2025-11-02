@@ -29,7 +29,7 @@ public:
                std::unordered_map<std::string, u32>&& anim_map);
 
 public:
-  expect<sprite_atlas> from_chima(const chima::spritesheet& sheet);
+  static expect<sprite_atlas> from_chima(const chima::spritesheet& sheet);
 
 public:
   ntf::optional<sprite> find_sprite(std::string_view name) const;

@@ -285,6 +285,11 @@ shogle::window& window() {
   return g_renderer->win;
 }
 
+shogle::context_view shogle_ctx() {
+  NTF_ASSERT(g_renderer.has_value());
+  return g_renderer->ctx;
+}
+
 expect<shogle::pipeline> create_pipeline(std::string_view frag_src, pipeline_attrib attrib) {
   NTF_ASSERT(g_renderer.has_value());
 

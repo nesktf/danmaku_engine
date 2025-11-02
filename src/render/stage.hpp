@@ -44,6 +44,7 @@ struct sprite_uvs {
 class stage_renderer {
 public:
   static constexpr size_t MAX_SHADER_SAMPLERS = 8u;
+  static constexpr u32 DEFAULT_STAGE_INSTANCES = 1024u;
 
   struct sprite_shader_data {
     mat4 transform;
@@ -67,6 +68,9 @@ public:
 public:
   stage_renderer(u32 instances, stage_viewport&& viewport,
                  shogle::shader_storage_buffer&& sprite_buffer);
+
+public:
+  static expect<stage_renderer> create(u32 instances = DEFAULT_STAGE_INSTANCES);
 
 public:
   stage_viewport& viewport() { return _viewport; }
