@@ -160,7 +160,7 @@ ntf::cspan<shogle::texture_binding> stage_renderer::tex_binds() const {
 }
 
 ntf::cspan<shogle::shader_binding> stage_renderer::shader_binds() const {
-  return {_sprite_buffer_binds};
+  return {&_sprite_buffer_binds, 1};
 }
 
 void render_stage(stage_renderer& stage) {

@@ -15,11 +15,11 @@ static okuu::expect<okuu::stage::lua_env> load_stage(chima::context& chima) {
     resources.emplace_back(okuu::assets::sprite_atlas::from_chima(chara_sheet).value());
   resources.emplace_back(okuu::assets::sprite_atlas::from_chima(effect_sheet).value());
 
-  auto cirno_idle = chara_atlas.find_animation("cirno.idle").value();
-  auto cirno_right = chara_atlas.find_animation("cirno.right").value();
-  auto cirno_idle_right = chara_atlas.find_animation("cirno.idle_to_right").value();
-  auto cirno_left = chara_atlas.find_animation("cirno.left").value();
-  auto cirno_idle_left = chara_atlas.find_animation("cirno.idle_to_left").value();
+  auto cirno_idle = chara_atlas.find_animation("chara_cirno.idle").value();
+  auto cirno_right = chara_atlas.find_animation("chara_cirno.right").value();
+  auto cirno_idle_right = chara_atlas.find_animation("chara_cirno.idle_to_right").value();
+  auto cirno_left = chara_atlas.find_animation("chara_cirno.left").value();
+  auto cirno_idle_left = chara_atlas.find_animation("chara_cirno.idle_to_left").value();
 
   okuu::assets::sprite_animator chara_animator{chara_atlas, cirno_idle};
 

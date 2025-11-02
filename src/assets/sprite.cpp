@@ -40,7 +40,6 @@ expect<sprite_atlas> sprite_atlas::from_chima(const chima::spritesheet& sheet) {
       [[maybe_unused]] auto [it, empl] = anim_map.try_emplace(std::move(name), i);
       NTF_ASSERT(empl);
       ++i;
-      ++i;
     }
 
     return {std::move(atlas_tex), std::move(uvs), std::move(sprite_map), std::move(anim_pos),
