@@ -55,7 +55,7 @@ public:
   friend class element;
 
 public:
-  free_list();
+  free_list() : _elems{}, _free{} {}
 
 public:
   template<typename... Args>
@@ -88,9 +88,7 @@ public:
     }
   }
 
-  ntf::span<ntf::nullable<T>> elems() { return {_elems.begin(), _elems.size()}; }
-
-  ntf::cspan<ntf::nullable<T>> elems() const { return {_elems.begin(), _elems.size()}; }
+  // ntf::cspan<ntf::nullable<T>> elems() const { return {_elems.data(), _elems.size()}; }
 
 private:
   std::vector<ntf::nullable<T>> _elems;

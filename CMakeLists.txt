@@ -37,6 +37,7 @@ list(APPEND LIB_INCLUDE sol2::sol2)
 # file(GLOB_RECURSE SOURCE_FILES "src/*.cpp")
 list(APPEND SOURCE_FILES
   src/render/instance.cpp
+  src/render/shader_src.cpp
   src/render/stage.cpp
   src/stage/entity.cpp
   src/stage/stage.cpp

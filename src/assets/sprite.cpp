@@ -3,7 +3,7 @@
 
 namespace okuu::assets {
 
-sprite_atlas::sprite_atlas(shogle::texture2d&& tex, ntf::unique_array<sprite_uvs>&& uvs,
+sprite_atlas::sprite_atlas(shogle::texture2d&& tex, ntf::unique_array<render::sprite_uvs>&& uvs,
                            std::unordered_map<std::string, u32>&& sprite_map,
                            ntf::unique_array<anim_meta>&& anim_pos,
                            std::unordered_map<std::string, u32>&& anim_map) :
@@ -14,7 +14,7 @@ sprite_atlas::sprite_atlas(shogle::texture2d&& tex, ntf::unique_array<sprite_uvs
 expect<sprite_atlas> sprite_atlas::from_chima(const chima::spritesheet& sheet) {
   const auto parse_sheet = [&](shogle::texture2d&& atlas_tex) -> sprite_atlas {
     const auto sprites = sheet.sprites();
-    ntf::unique_array<sprite_uvs> uvs(sprites.size());
+    ntf::unique_array<render::sprite_uvs> uvs(sprites.size());
     std::unordered_map<std::string, u32> sprite_map;
     for (u32 i = 0; const auto& sprite : sprites) {
       uvs[i].x_lin = sprite.uv_x_lin;
@@ -67,7 +67,8 @@ auto sprite_atlas::find_animation(std::string_view name) const -> ntf::optional<
   return {ntf::in_place, static_cast<animation>(it->second)};
 }
 
-auto sprite_atlas::render_data(sprite spr) const -> std::pair<shogle::texture2d_view, sprite_uvs> {
+auto sprite_atlas::render_data(sprite spr) const
+  -> std::pair<shogle::texture2d_view, render::sprite_uvs> {
   const u32 idx = static_cast<u32>(spr);
   NTF_ASSERT(idx < _sprite_uvs.size());
   return {_tex, _sprite_uvs[idx]};

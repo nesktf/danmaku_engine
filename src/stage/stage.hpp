@@ -18,7 +18,8 @@ public:
   using idx_elem = std::pair<u32, T>;
 
 public:
-  stage_scene(player_entity&& player_, render::stage_renderer&& renderer_);
+  stage_scene(u32 max_entities, player_entity&& player_,
+              std::vector<assets::sprite_atlas>&& atlas_assets_);
 
 public:
   void tick();
@@ -59,7 +60,8 @@ public:
   lua_env(sol::state&& lua, sol::table lib_table, std::unique_ptr<stage_scene>&& scene);
 
 public:
-  static expect<lua_env> load(const std::string& script_path, const assets::sprite_atlas& atlas);
+  static expect<lua_env> load(const std::string& script_path,
+                              std::unique_ptr<stage_scene>&& scene);
 
 public:
   void tick();

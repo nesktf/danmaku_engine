@@ -1,12 +1,9 @@
 #include "./instance.hpp"
-#include "./shader_src.hpp"
 #include <ntfstl/logger.hpp>
 
 namespace okuu::render {
 
 namespace {
-
-static constexpr u32 SPRITE_BATCH_SIZE = 1024u;
 
 std::string shogle_to_str(shogle::render_error&& err) {
   return err.what();
@@ -74,40 +71,6 @@ expect<std::pair<shogle::texture2d, shogle::framebuffer>> make_fb(shogle::contex
   return make_tex(ctx, width, height, nullptr).and_then(make_thing);
 }
 
-expect<shogle::pipeline> make_pip(shogle::context_view ctx, shogle::vertex_shader_view vert,
-                                  shogle::fragment_shader_view frag,
-                                  ntf::cspan<shogle::attribute_binding> attribs) {
-  const shogle::blend_opts blending{
-    .mode = shogle::blend_mode::add,
-    .src_factor = shogle::blend_factor::src_alpha,
-    .dst_factor = shogle::blend_factor::inv_src_alpha,
-    .color = {0.f, 0.f, 0.f, 0.f},
-  };
-  const shogle::depth_test_opts depth_test{
-    .func = shogle::test_func::less,
-    .near_bound = 0.f,
-    .far_bound = 1.f,
-  };
-
-  const shogle::shader_t stages_fb[] = {vert.get(), frag.get()};
-  const shogle::pipeline_desc pip_desc{
-    .attributes = {attribs.data(), attribs.size()},
-    .stages = stages_fb,
-    .primitive = shogle::primitive_mode::triangles,
-    .poly_mode = shogle::polygon_mode::fill,
-    .poly_width = 1.f,
-    .tests =
-      {
-        .stencil_test = nullptr,
-        .depth_test = depth_test,
-        .scissor_test = nullptr,
-        .face_culling = nullptr,
-        .blending = blending,
-      },
-  };
-  return shogle::pipeline::create(ctx, pip_desc).transform_error(shogle_to_str);
-}
-
 expect<shogle::buffer> make_buffer(shogle::context_view ctx, shogle::buffer_type type, size_t size,
                                    const void* data) {
   using lambda_ret = expect<shogle::buffer>;
@@ -160,34 +123,17 @@ expect<shogle::texture2d> make_missing_albedo(shogle::context_view ctx) {
   return make_tex(ctx, tex_extent, tex_extent, missing_albedo_bitmap<tex_extent>.data());
 }
 
-stage_renderer make_sprite_renderer(shogle::context_view ctx, u32 instances,
-                                    size_t elem_buffer_sz) {
-  return make_buffer(ctx, shogle::buffer_type::shader_storage, instances * elem_buffer_sz, nullptr)
-    .transform([](shogle::buffer&& buff) {
-      return shogle::to_typed<shogle::buffer_type::shader_storage>(std::move(buff));
-    })
-    .and_then([=](shogle::shader_storage_buffer&& ssbo) -> expect<stage_renderer> {
-      auto quad = shogle::quad_mesh::create(ctx);
-      if (!quad) {
-        return {ntf::unexpect, shogle_to_str(std::move(quad.error()))};
-      }
-      return {ntf::in_place, instances, std::move(ssbo), std::move(*quad)};
-    })
-    .value();
-}
-
 } // namespace
 
 ntf::nullable<okuu_render_ctx> g_renderer;
 
 okuu_render_ctx::okuu_render_ctx(shogle::window&& win_, shogle::context&& ctx_,
-                                 shader_data&& shaders_, stage_renderer&& sprite_ren_,
-                                 shogle::pipeline&& stage_pip_, shogle::texture2d&& base_fb_tex_,
-                                 shogle::framebuffer&& base_fb_, shogle::pipeline&& back_pip_) :
-    win{std::move(win_)}, ctx{std::move(ctx_)}, shaders{std::move(shaders_)},
-    sprite_ren{std::move(sprite_ren_)}, stage_pip{std::move(stage_pip_)},
-    base_fb_tex{std::move(base_fb_tex_)}, base_fb{std::move(base_fb_)},
-    back_pip{std::move(back_pip_)}, missing_tex{make_missing_albedo<4>(ctx).value()} {}
+                                 shogle::quad_mesh&& quad_, shogle::texture2d&& missing_tex_,
+                                 shogle::texture2d&& fb_tex_, shogle::framebuffer&& fb_,
+                                 base_pipelines&& pips_) :
+    win{std::move(win_)},
+    ctx{std::move(ctx_)}, quad{std::move(quad_)}, missing_tex{std::move(missing_tex_)},
+    fb_tex{std::move(fb_tex_)}, fb{std::move(fb_)}, pips{std::move(pips_)}, viewport_event{} {}
 
 [[nodiscard]] singleton_handle init() {
   const u32 win_width = 1280;
@@ -232,30 +178,13 @@ okuu_render_ctx::okuu_render_ctx(shogle::window&& win_, shogle::context&& ctx_,
   };
   auto ctx = shogle::context::create(ctx_params).value();
 
-  auto sprite_vert_shader = shogle::vertex_shader::create(ctx, {vert_sprite}).value();
-  auto sprite_frag_shader = shogle::fragment_shader::create(ctx, {frag_sprite}).value();
-
-  auto vert_fbo_shader = shogle::vertex_shader::create(ctx, {vert_fbo}).value();
-  auto frag_fbo_shader = shogle::fragment_shader::create(ctx, {frag_fbo}).value();
-
-  auto frag_back_shader = shogle::fragment_shader::create(ctx, {frag_back}).value();
-
-  const auto attribs = shogle::pnt_vertex::aos_binding();
-  auto pip_vp = make_pip(ctx, vert_fbo_shader, frag_fbo_shader, attribs).value();
-
-  auto pip_back = make_pip(ctx, vert_fbo_shader, frag_back_shader, attribs).value();
-
+  auto quad = shogle::quad_mesh::create(ctx).value();
+  auto pips = init_pipelines(ctx).value();
+  auto missing_tex = make_missing_albedo(ctx).value();
   auto [fb_tex, fb] = make_fb(ctx, 1280, 720).value();
 
-  auto sprite_ren = make_sprite_renderer(ctx, SPRITE_BATCH_SIZE, sizeof(sprite_shader_data));
-
-  g_renderer.emplace(std::move(win), std::move(ctx),
-                     shader_data{
-                       .vert_sprite_generic = std::move(sprite_vert_shader),
-                       .frag_sprite_generic = std::move(sprite_frag_shader),
-                     },
-                     std::move(sprite_ren), std::move(pip_vp), std::move(fb_tex), std::move(fb),
-                     std::move(pip_back));
+  g_renderer.emplace(std::move(win), std::move(ctx), std::move(quad), std::move(missing_tex),
+                     std::move(fb_tex), std::move(fb), std::move(pips));
   NTF_ASSERT(g_renderer.has_value());
   g_renderer->win.set_viewport_callback([](auto&, uvec2 vp) {
     shogle::framebuffer::get_default(g_renderer->ctx).viewport({0.f, 0.f, vp.x, vp.y});
@@ -290,46 +219,18 @@ shogle::context_view shogle_ctx() {
   return g_renderer->ctx;
 }
 
-expect<shogle::pipeline> create_pipeline(std::string_view frag_src, pipeline_attrib attrib) {
-  NTF_ASSERT(g_renderer.has_value());
-
-  using lambda_ret = std::pair<ntf::cspan<shogle::attribute_binding>, shogle::vertex_shader_view>;
-  const auto get_attrib = [&]() -> lambda_ret {
-    const auto& shaders = g_renderer->shaders;
-
-    static constexpr auto pnt_aos = shogle::pnt_vertex::aos_binding();
-    switch (attrib) {
-      case pipeline_attrib::sprite_generic: {
-        ntf::cspan<shogle::attribute_binding> attr{pnt_aos.data(), pnt_aos.size()};
-        return {attr, shaders.vert_sprite_generic};
-      }
-      default:
-        return {};
-    }
-  };
-
-  return shogle::fragment_shader::create(g_renderer->ctx, {frag_src})
-    .transform_error(shogle_to_str)
-    .and_then([&](shogle::fragment_shader&& fragment) {
-      const auto [attrib, vertex] = get_attrib();
-      return make_pip(g_renderer->ctx, vertex, fragment, attrib);
-    });
-}
-
 expect<shogle::shader_storage_buffer> create_ssbo(size_t size, const void* data) {
   NTF_ASSERT(g_renderer.has_value());
   return make_buffer(g_renderer->ctx, shogle::buffer_type::shader_storage, size, data)
     .transform([](shogle::buffer&& buffer) -> shogle::shader_storage_buffer {
-      auto ret = shogle::to_typed<shogle::buffer_type::shader_storage>(std::move(buffer));
-      ntf::logger::debug("AAA {}", ret.size());
-      return ret;
+      return shogle::to_typed<shogle::buffer_type::shader_storage>(std::move(buffer));
     });
 }
 
 void render_back(float t) {
   NTF_ASSERT(g_renderer.has_value());
   auto fb = shogle::framebuffer::get_default(g_renderer->ctx);
-  auto& pip = g_renderer->back_pip;
+  auto& pip = g_renderer->pips.back;
 
   auto loc_proj = pip.uniform_location("proj").value();
   auto loc_model = pip.uniform_location("model").value();
@@ -355,7 +256,7 @@ void render_back(float t) {
   g_renderer->ctx.submit_render_command({
     .target = fb,
     .pipeline = pip,
-    .buffers = g_renderer->sprite_ren.quad().bindings(),
+    .buffers = g_renderer->quad.bindings(),
     .textures = {tbind},
     .consts = unifs,
     .opts =

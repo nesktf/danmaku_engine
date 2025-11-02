@@ -31,11 +31,11 @@ expect<shogle::texture2d> create_texture(u32 width, u32 height, const void* data
 expect<std::pair<shogle::texture2d, shogle::framebuffer>> create_framebuffer(u32 width,
                                                                              u32 height);
 
-enum class pipeline_attrib {
-  sprite_generic = 0,
-};
-
-expect<shogle::pipeline> create_pipeline(std::string_view frag_src, pipeline_attrib attrib);
+// enum class pipeline_attrib {
+//   sprite_generic = 0,
+// };
+//
+// expect<shogle::pipeline> create_pipeline(std::string_view frag_src, pipeline_attrib attrib);
 
 expect<shogle::shader_storage_buffer> create_ssbo(size_t size, const void* data = nullptr);
 

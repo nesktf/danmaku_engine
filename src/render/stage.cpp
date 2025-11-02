@@ -6,8 +6,8 @@ namespace okuu::render {
 
 stage_viewport::stage_viewport(u32 width, u32 height, u32 xpos, u32 ypos,
                                shogle::texture2d&& fb_tex, shogle::framebuffer&& fb) :
-    _fb_tex{std::move(fb_tex)}, _fb{std::move(fb)}, _width{width}, _height{height}, _xpos{xpos},
-    _ypos{ypos} {}
+    _fb_tex{std::move(fb_tex)},
+    _fb{std::move(fb)}, _width{width}, _height{height}, _xpos{xpos}, _ypos{ypos} {}
 
 expect<stage_viewport> stage_viewport::create(u32 width, u32 height, u32 xpos, u32 ypos) {
   NTF_ASSERT(g_renderer.has_value());
@@ -53,10 +53,10 @@ mat4 stage_viewport::view() const {
   return shogle::build_view_matrix(vec2{0, 0}, sz * .5f, vec2{1.f, 1.f}, vec3{0.f});
 }
 
-void render_viewport(shogle::quad_mesh& quad, stage_viewport& viewport) {
+void render_viewport(stage_viewport& viewport, shogle::framebuffer_view fb) {
   NTF_ASSERT(g_renderer.has_value());
-  auto fb = shogle::framebuffer::get_default(g_renderer->ctx);
-  auto& pip = g_renderer->stage_pip;
+  auto& quad = g_renderer->quad;
+  auto& pip = g_renderer->pips.viewport;
 
   auto loc_model = pip.uniform_location("model").value();
   auto loc_proj = pip.uniform_location("proj").value();
@@ -90,6 +90,24 @@ void render_viewport(shogle::quad_mesh& quad, stage_viewport& viewport) {
     .sort_group = 0,
     .render_callback = {},
   });
+}
+
+stage_renderer::stage_renderer(u32 instances, stage_viewport&& viewport,
+                               shogle::shader_storage_buffer&& sprite_buffer) :
+    _viewport{std::move(viewport)},
+    _sprite_buffer{std::move(sprite_buffer)}, _tex_binds{}, _sprite_buffer_binds{},
+    _active_texes{0u}, _max_instances{instances}, _sprite_instances{0} {
+  _sprite_buffer_binds.buffer = _sprite_buffer;
+  _sprite_buffer_binds.binding = 0;
+  _sprite_buffer_binds.offset = 0u;
+  _sprite_buffer_binds.size = _sprite_buffer.size();
+  reset_instances();
+}
+
+expect<stage_renderer> stage_renderer::create(u32 instances) {
+  auto viewport = stage_viewport::create(600, 700, 640, 360).value();
+  auto buffer = create_ssbo(instances * sizeof(sprite_shader_data)).value();
+  return {ntf::in_place, instances, std::move(viewport), std::move(buffer)};
 }
 
 void stage_renderer::enqueue_sprite(const sprite_render_data& sprite_data) {
@@ -148,7 +166,7 @@ ntf::cspan<shogle::shader_binding> stage_renderer::shader_binds() const {
 void render_stage(stage_renderer& stage) {
   NTF_ASSERT(g_renderer.has_value());
   auto& quad = g_renderer->quad;
-  auto& pipeline = g_renderer->sprite_pipeline;
+  auto& pipeline = g_renderer->pips.sprite;
 
   auto& vp = stage.viewport();
   g_renderer->ctx.submit_render_command({

@@ -1,6 +1,4 @@
-#pragma once
-
-#include <string_view>
+#include "./instance.hpp"
 
 namespace okuu::render {
 
@@ -48,7 +46,7 @@ void main() {
 
 )glsl";
 
-constexpr std::string_view vert_fbo = R"glsl(
+constexpr std::string_view vert_common = R"glsl(
 #version 460 core
 
 layout (location = 0) in vec3 att_coords;
@@ -66,7 +64,7 @@ void main() {
 
 )glsl";
 
-constexpr std::string_view frag_fbo = R"glsl(
+constexpr std::string_view frag_viewport = R"glsl(
 #version 460 core
 
 in vec2 tex_coord;
@@ -144,5 +142,75 @@ void main() {
   frag_color = vec4(col, 1.0)*texture(tex, coords);
 }
 )glsl";
+
+expect<shogle::pipeline> make_pip(shogle::context_view ctx, shogle::vertex_shader_view vert,
+                                  shogle::fragment_shader_view frag,
+                                  ntf::cspan<shogle::attribute_binding> attribs) {
+  const shogle::blend_opts blending{
+    .mode = shogle::blend_mode::add,
+    .src_factor = shogle::blend_factor::src_alpha,
+    .dst_factor = shogle::blend_factor::inv_src_alpha,
+    .color = {0.f, 0.f, 0.f, 0.f},
+  };
+  const shogle::depth_test_opts depth_test{
+    .func = shogle::test_func::less,
+    .near_bound = 0.f,
+    .far_bound = 1.f,
+  };
+
+  const shogle::shader_t stages_fb[] = {vert.get(), frag.get()};
+  const shogle::pipeline_desc pip_desc{
+    .attributes = {attribs.data(), attribs.size()},
+    .stages = stages_fb,
+    .primitive = shogle::primitive_mode::triangles,
+    .poly_mode = shogle::polygon_mode::fill,
+    .poly_width = 1.f,
+    .tests =
+      {
+        .stencil_test = nullptr,
+        .depth_test = depth_test,
+        .scissor_test = nullptr,
+        .face_culling = nullptr,
+        .blending = blending,
+      },
+  };
+  return shogle::pipeline::create(ctx, pip_desc)
+    .transform_error([](shogle::render_error&& err) -> std::string {
+      std::string base = err.what();
+      if (err.has_msg()) {
+        base.append(err.msg().data(), err.msg().size());
+      }
+      return base;
+    });
+}
+
+expect<base_pipelines> init_pipelines(shogle::context_view ctx) {
+  const auto attribs = shogle::pnt_vertex::aos_binding();
+
+  auto sprite_vert_shader = shogle::vertex_shader::create(ctx, {vert_sprite}).value();
+  auto sprite_frag_shader = shogle::fragment_shader::create(ctx, {frag_sprite}).value();
+
+  auto vert_common_shader = shogle::vertex_shader::create(ctx, {vert_common}).value();
+  auto frag_viewport_shader = shogle::fragment_shader::create(ctx, {frag_viewport}).value();
+
+  auto frag_back_shader = shogle::fragment_shader::create(ctx, {frag_back}).value();
+
+  auto pip_vp = make_pip(ctx, vert_common_shader, frag_viewport_shader, attribs);
+  if (!pip_vp) {
+    return {ntf::unexpect, std::move(pip_vp.error())};
+  }
+
+  auto pip_sprite = make_pip(ctx, sprite_vert_shader, sprite_frag_shader, attribs);
+  if (!pip_sprite) {
+    return {ntf::unexpect, std::move(pip_sprite.error())};
+  }
+
+  auto pip_back = make_pip(ctx, vert_common_shader, frag_back_shader, attribs);
+  if (!pip_back) {
+    return {ntf::unexpect, std::move(pip_back.error())};
+  }
+
+  return {ntf::in_place, std::move(*pip_vp), std::move(*pip_sprite), std::move(*pip_back)};
+}
 
 } // namespace okuu::render

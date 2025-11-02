@@ -1,5 +1,6 @@
 #include "./stage.hpp"
 
+#include "../render/instance.hpp"
 #include "../render/stage.hpp"
 #include <ntfstl/logger.hpp>
 
@@ -115,8 +116,9 @@ sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<stage_scene> scene
     return {boss->pos().x, boss->pos().y};
   });
 
-  lib_stage.set_function(
-    "player_pos", [=]() -> cmplx { return {scene->player.pos().x, scene->player.pos().y}; });
+  lib_stage.set_function("player_pos", [=]() -> cmplx {
+    return {scene->player.pos().x, scene->player.pos().y};
+  });
 
   lib_stage.set_function("cowait",
                          sol::yielding([=](u32 time) { scene->task_wait_ticks = time; }));
@@ -145,9 +147,12 @@ sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<stage_scene> scene
 
 } // namespace
 
-stage_scene::stage_scene(player_entity&& player_, render::stage_renderer&& renderer_) :
-    projs{}, bosses{}, boss_count{0u}, player{std::move(player_)}, atlas_assets{},
-    renderer{std::move(renderer_)}, task_wait_ticks{0u}, ticks{0u} {}
+stage_scene::stage_scene(u32 max_entities, player_entity&& player_,
+                         std::vector<assets::sprite_atlas>&& atlas_assets_) :
+    projs{},
+    bosses{}, boss_count{0u}, player{std::move(player_)}, atlas_assets{std::move(atlas_assets_)},
+    renderer{okuu::render::stage_renderer::create(max_entities).value()}, task_wait_ticks{0u},
+    ticks{0u} {}
 
 auto stage_scene::find_sprite(std::string_view name) const
   -> ntf::optional<idx_elem<assets::sprite_atlas::sprite>> {
@@ -204,31 +209,32 @@ void stage_scene::render(double dt, double alpha) {
 
   render_sprite(player);
 
-  const auto proj_span = projs.elems();
-  for (const auto& proj : proj_span) {
-    if (!proj.has_value()) {
-      continue;
+  // const auto proj_span = projs.elems();
+  // for (const auto& proj : proj_span) {
+  //   if (!proj.has_value()) {
+  //     continue;
+  //   }
+  //   render_sprite(*proj);
+  // }
+  render::render_stage(this->renderer);
+  render::render_viewport(this->renderer.viewport(),
+                          shogle::framebuffer::get_default(render::g_renderer->ctx));
+}
+
+void stage_scene::tick() {
+  player.tick();
+
+  for (u32 i = 0; i < this->boss_count; ++i) {
+    auto& boss = bosses[i];
+    if (boss.has_value()) {
+      boss->tick();
     }
-    render_sprite(*proj);
   }
 }
 
-expect<lua_env> lua_env::load(const std::string& script_path, const assets::sprite_atlas& atlas) {
+expect<lua_env> lua_env::load(const std::string& script_path,
+                              std::unique_ptr<stage_scene>&& scene) {
   // auto vp = okuu::render::stage_viewport::create(600, 700, 640, 360);
-  auto cirno_right = atlas.find_animation("cirno_right").value();
-  auto cirno_left = atlas.find_animation("cirno_left").value();
-  auto cirno_idle = atlas.find_animation("cirno_idle").value();
-
-  assets::sprite_animator animator{atlas, cirno_right};
-
-  player_entity::animation_data anims{cirno_idle,  cirno_left,  cirno_left, cirno_left,
-                                      cirno_right, cirno_right, cirno_right};
-
-  player_entity player{vec2{0.f, 0.f}, std::move(anims), std::move(animator)};
-
-  auto renderer = render::stage_renderer::create().value();
-
-  auto scene = std::make_unique<stage_scene>(std::move(player), std::move(renderer));
 
   sol::state lua;
   auto lib_table = prepare_lua_env(lua, scene.get());
@@ -265,6 +271,10 @@ void lua_env::projectile_view::for_each(sol::function f) {
       f(*elem);
     }
   }
+}
+
+void lua_env::tick() {
+  scene().tick();
 }
 
 } // namespace okuu::stage
