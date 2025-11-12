@@ -42,20 +42,34 @@ struct sprite_uvs {
 };
 
 class stage_renderer {
+private:
+  enum SHADER_BIND {
+    SHADER_VERTEX_BIND = 0,
+    SHADER_FRAGMENT_BIND,
+    SHADER_BIND_COUNT,
+  };
+
 public:
   static constexpr size_t MAX_SHADER_SAMPLERS = 8u;
   static constexpr u32 DEFAULT_STAGE_INSTANCES = 1024u;
 
-  struct sprite_shader_data {
+  struct sprite_vertex_data {
     mat4 transform;
     mat4 view;
     mat4 proj;
+    f32 uv_scale_x;
+    f32 uv_scale_y;
+    f32 uv_offset_x;
+    f32 uv_offset_y;
+  };
+
+  struct sprite_fragment_data {
+    f32 color_r;
+    f32 color_g;
+    f32 color_b;
+    f32 color_a;
     i32 sampler;
     i32 ticks;
-    f32 uv_lin_x;
-    f32 uv_lin_y;
-    f32 uv_con_x;
-    f32 uv_con_y;
   };
 
   struct sprite_render_data {
@@ -63,11 +77,13 @@ public:
     shogle::texture2d_view texture;
     u32 ticks;
     sprite_uvs uvs;
+    color4 color;
   };
 
 public:
   stage_renderer(u32 instances, stage_viewport&& viewport,
-                 shogle::shader_storage_buffer&& sprite_buffer);
+                 shogle::shader_storage_buffer&& sprite_vert_buffer,
+                 shogle::shader_storage_buffer&& sprite_frag_buffer);
 
 public:
   static expect<stage_renderer> create(u32 instances = DEFAULT_STAGE_INSTANCES);
@@ -86,9 +102,10 @@ public:
 
 private:
   stage_viewport _viewport;
-  shogle::shader_storage_buffer _sprite_buffer;
+  shogle::shader_storage_buffer _sprite_vert_buffer;
+  shogle::shader_storage_buffer _sprite_frag_buffer;
   std::array<shogle::texture_binding, MAX_SHADER_SAMPLERS> _tex_binds;
-  shogle::shader_binding _sprite_buffer_binds;
+  std::array<shogle::shader_binding, SHADER_BIND_COUNT> _sprite_buffer_binds;
   u32 _active_texes;
   u32 _max_instances;
   u32 _sprite_instances;

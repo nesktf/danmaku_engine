@@ -8,19 +8,37 @@ constexpr std::string_view vert_sprite = R"glsl(
 layout (location = 0) in vec3 att_coords;
 layout (location = 1) in vec3 att_normals;
 layout (location = 2) in vec2 att_texcoords;
-out vec2 tex_coord;
 
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_proj;
+out VS_OUT {
+  vec2 tex_coord;
+  flat int instance;
+} vs_out;
 
-uniform vec4 u_offset;
+struct sprite_vertex_data {
+  mat4 transform;
+  mat4 view;
+  mat4 proj;
+  float uv_scale_x;
+  float uv_scale_y;
+  float uv_offset_x;
+  float uv_offset_y;
+};
+
+layout (std430, binding = 1) buffer sprite_vert {
+  sprite_vertex_data data[];
+};
 
 void main() {
-  tex_coord.x = att_texcoords.x*u_offset.x + u_offset.z;
-  tex_coord.y = att_texcoords.y*u_offset.y + u_offset.w;
+  vs_out.tex_coord.x =
+    att_texcoords.x*data[gl_InstanceID].uv_scale_x + data[gl_InstanceID].uv_offset_x;
+  vs_out.tex_coord.y =
+    att_texcoords.y*data[gl_InstanceID].uv_scale_y + data[gl_InstanceID].uv_offset_y;
 
-  gl_Position = u_proj * u_view * u_model * vec4(att_coords, 1.0f);
+  gl_Position = data[gl_InstanceID].proj *
+                data[gl_InstanceID].view *
+                data[gl_InstanceID].transform *
+                vec4(att_coords, 1.0f);
+  vs_out.instance = gl_InstanceID;
 }
 
 )glsl";
@@ -28,14 +46,37 @@ void main() {
 constexpr std::string_view frag_sprite = R"glsl(
 #version 460 core
 
-in vec2 tex_coord;
 out vec4 frag_color;
 
-uniform sampler2D u_sprite_sampler;
-uniform vec4 u_sprite_color;
+in VS_OUT {
+  vec2 tex_coord;
+  flat int instance;
+} fs_in;
+
+struct sprite_fragment_data {
+  float color_r;
+  float color_g;
+  float color_b;
+  float color_a;
+  int sampler;
+  int ticks;
+};
+
+
+layout (std430, binding = 2) buffer sprite_frag {
+  sprite_fragment_data data_frag[];
+};
+
+uniform sampler2D samplers[8];
 
 void main() {
-  vec4 out_color = u_sprite_color * texture(u_sprite_sampler, tex_coord);
+  vec4 color = vec4(
+    data_frag[fs_in.instance].color_r,
+    data_frag[fs_in.instance].color_g,
+    data_frag[fs_in.instance].color_b,
+    data_frag[fs_in.instance].color_a
+  );
+  vec4 out_color = color*texture(samplers[data_frag[fs_in.instance].sampler], fs_in.tex_coord);
 
   if (out_color.a < 0.1) {
     discard;

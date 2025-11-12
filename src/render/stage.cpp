@@ -6,8 +6,8 @@ namespace okuu::render {
 
 stage_viewport::stage_viewport(u32 width, u32 height, u32 xpos, u32 ypos,
                                shogle::texture2d&& fb_tex, shogle::framebuffer&& fb) :
-    _fb_tex{std::move(fb_tex)},
-    _fb{std::move(fb)}, _width{width}, _height{height}, _xpos{xpos}, _ypos{ypos} {}
+    _fb_tex{std::move(fb_tex)}, _fb{std::move(fb)}, _width{width}, _height{height}, _xpos{xpos},
+    _ypos{ypos} {}
 
 expect<stage_viewport> stage_viewport::create(u32 width, u32 height, u32 xpos, u32 ypos) {
   NTF_ASSERT(g_renderer.has_value());
@@ -93,21 +93,33 @@ void render_viewport(stage_viewport& viewport, shogle::framebuffer_view fb) {
 }
 
 stage_renderer::stage_renderer(u32 instances, stage_viewport&& viewport,
-                               shogle::shader_storage_buffer&& sprite_buffer) :
-    _viewport{std::move(viewport)},
-    _sprite_buffer{std::move(sprite_buffer)}, _tex_binds{}, _sprite_buffer_binds{},
+                               shogle::shader_storage_buffer&& sprite_vert_buffer,
+                               shogle::shader_storage_buffer&& sprite_frag_buffer) :
+    _viewport{std::move(viewport)}, _sprite_vert_buffer{std::move(sprite_vert_buffer)},
+    _sprite_frag_buffer{std::move(sprite_frag_buffer)}, _tex_binds{}, _sprite_buffer_binds{},
     _active_texes{0u}, _max_instances{instances}, _sprite_instances{0} {
-  _sprite_buffer_binds.buffer = _sprite_buffer;
-  _sprite_buffer_binds.binding = 0;
-  _sprite_buffer_binds.offset = 0u;
-  _sprite_buffer_binds.size = _sprite_buffer.size();
+
+  auto& vert_bind = _sprite_buffer_binds[SHADER_VERTEX_BIND];
+  vert_bind.buffer = _sprite_vert_buffer;
+  vert_bind.binding = 1;
+  vert_bind.offset = 0u;
+  vert_bind.size = _sprite_vert_buffer.size();
+
+  auto& frag_bind = _sprite_buffer_binds[SHADER_FRAGMENT_BIND];
+  frag_bind.buffer = _sprite_frag_buffer;
+  frag_bind.binding = 2;
+  frag_bind.offset = 0u;
+  frag_bind.size = _sprite_frag_buffer.size();
+
   reset_instances();
 }
 
 expect<stage_renderer> stage_renderer::create(u32 instances) {
   auto viewport = stage_viewport::create(600, 700, 640, 360).value();
-  auto buffer = create_ssbo(instances * sizeof(sprite_shader_data)).value();
-  return {ntf::in_place, instances, std::move(viewport), std::move(buffer)};
+  auto vert_buffer = create_ssbo(instances * sizeof(sprite_vertex_data)).value();
+  auto frag_buffer = create_ssbo(instances * sizeof(sprite_fragment_data)).value();
+  return {ntf::in_place, instances, std::move(viewport), std::move(vert_buffer),
+          std::move(frag_buffer)};
 }
 
 void stage_renderer::enqueue_sprite(const sprite_render_data& sprite_data) {
@@ -129,19 +141,27 @@ void stage_renderer::enqueue_sprite(const sprite_render_data& sprite_data) {
     return static_cast<i32>(i);
   };
 
-  const sprite_shader_data shader_data{
+  const sprite_vertex_data vert_data{
     .transform = sprite_data.transform,
     .view = _viewport.view(),
     .proj = _viewport.proj(),
+    .uv_scale_x = sprite_data.uvs.x_lin,
+    .uv_scale_y = sprite_data.uvs.y_lin,
+    .uv_offset_x = sprite_data.uvs.x_con,
+    .uv_offset_y = sprite_data.uvs.y_con,
+  };
+  _sprite_vert_buffer.upload(vert_data, _sprite_instances * sizeof(vert_data));
+
+  const sprite_fragment_data frag_data{
+    .color_r = sprite_data.color.r,
+    .color_g = sprite_data.color.g,
+    .color_b = sprite_data.color.b,
+    .color_a = sprite_data.color.a,
     .sampler = setup_sprite_samplers(),
     .ticks = static_cast<i32>(sprite_data.ticks),
-    .uv_lin_x = sprite_data.uvs.x_lin,
-    .uv_lin_y = sprite_data.uvs.y_lin,
-    .uv_con_x = sprite_data.uvs.x_con,
-    .uv_con_y = sprite_data.uvs.y_con,
   };
+  _sprite_frag_buffer.upload(frag_data, _sprite_instances * sizeof(frag_data));
 
-  _sprite_buffer.upload(shader_data, _sprite_instances * sizeof(shader_data));
   ++_sprite_instances;
 }
 
@@ -160,7 +180,7 @@ ntf::cspan<shogle::texture_binding> stage_renderer::tex_binds() const {
 }
 
 ntf::cspan<shogle::shader_binding> stage_renderer::shader_binds() const {
-  return {&_sprite_buffer_binds, 1};
+  return {_sprite_buffer_binds.data(), _sprite_buffer_binds.size()};
 }
 
 void render_stage(stage_renderer& stage) {
@@ -168,13 +188,31 @@ void render_stage(stage_renderer& stage) {
   auto& quad = g_renderer->quad;
   auto& pipeline = g_renderer->pips.sprite;
 
+  const u32 sampler0 = pipeline.uniform_location("samplers[0]").value();
+  const u32 locs[stage_renderer::MAX_SHADER_SAMPLERS] = {
+    sampler0,     sampler0 + 1, sampler0 + 2, sampler0 + 3,
+    sampler0 + 4, sampler0 + 5, sampler0 + 6, sampler0 + 7,
+  };
+
+  shogle::uniform_const sampler_data[stage_renderer::MAX_SHADER_SAMPLERS];
+  auto tex_binds = stage.tex_binds();
+  u32 i = 0;
+  for (const auto& bind : tex_binds) {
+    sampler_data[i] = shogle::format_uniform_const(locs[i], (int)bind.sampler);
+    ++i;
+  }
+  while (i < stage_renderer::MAX_SHADER_SAMPLERS) {
+    sampler_data[i] = shogle::format_uniform_const(locs[i], (int)0);
+    ++i;
+  }
+
   auto& vp = stage.viewport();
   g_renderer->ctx.submit_render_command({
     .target = vp.framebuffer(),
     .pipeline = pipeline,
     .buffers = quad.bindings(stage.shader_binds()),
     .textures = stage.tex_binds(),
-    .consts = {},
+    .consts = sampler_data,
     .opts =
       {
         .vertex_count = 6,

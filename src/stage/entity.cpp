@@ -11,9 +11,8 @@ entity_movement::entity_movement(vec2 vel, vec2 acc, real ret) noexcept :
 
 entity_movement::entity_movement(vec2 vel, vec2 acc, real ret, vec2 attr, vec2 attr_p,
                                  real attr_exp) noexcept :
-    _vel{vel.x, vel.y},
-    _acc{acc.x, acc.y}, _ret{ret}, _attr{attr.x, attr.y}, _attr_p{attr_p.x, attr_p.y},
-    _attr_exp{attr_exp} {}
+    _vel{vel.x, vel.y}, _acc{acc.x, acc.y}, _ret{ret}, _attr{attr.x, attr.y},
+    _attr_p{attr_p.x, attr_p.y}, _attr_exp{attr_exp} {}
 
 void entity_movement::next_pos(vec2& curr_pos) {
   cmplx pos{curr_pos.x, curr_pos.y};
@@ -57,9 +56,8 @@ entity_movement entity_movement::move_towards(vec2 target, vec2 vel, vec2 attr, 
 
 projectile_entity::projectile_entity(u32 birth, vec2 pos, vec2 scale, real angular_speed,
                                      entity_sprite sprite, entity_movement movement) :
-    _birth{birth},
-    _ticks{0}, _pos{pos}, _scale{scale}, _rot{0.f}, _angular_speed{angular_speed}, _flags{0},
-    _movement{movement}, _sprite{sprite} {}
+    _birth{birth}, _ticks{0}, _pos{pos}, _scale{scale}, _rot{0.f}, _angular_speed{angular_speed},
+    _flags{0}, _movement{movement}, _sprite{sprite} {}
 
 void projectile_entity::tick() {
   _movement.next_pos(_pos);
@@ -95,9 +93,8 @@ entity_sprite boss_entity::sprite() const {
 
 player_entity::player_entity(vec2 pos, animation_data&& anims,
                              assets::sprite_animator&& animator) :
-    _ticks{0},
-    _pos{pos}, _flags{0}, _animator{std::move(animator)}, _anim_state{animation_state::IDLE},
-    _anims{std::move(anims)} {}
+    _ticks{0}, _pos{pos}, _flags{0}, _animator{std::move(animator)},
+    _anim_state{animation_state::IDLE}, _anims{std::move(anims)} {}
 
 void player_entity::tick() {
   cmplx move_dir{0.f};
@@ -134,7 +131,7 @@ void player_entity::tick() {
     // const vec2 clamp_min{0.f};
     // const vec2 clamp_max{VIEWPORT};
     _vel = vel;
-    _pos += vel;
+    _pos += vel * 8.f;
   }
 
   animation_state next_state = IDLE;
@@ -181,7 +178,7 @@ void player_entity::tick() {
       break;
   }
   _anim_state = next_state;
-  _animator.tick();
+  // _animator.tick();
   ++_ticks;
 }
 

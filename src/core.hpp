@@ -24,4 +24,6 @@ using shogle::vec2;
 using shogle::vec3;
 using shogle::vec4;
 
+using color4 = vec4;
+
 } // namespace okuu

@@ -116,9 +116,8 @@ sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<stage_scene> scene
     return {boss->pos().x, boss->pos().y};
   });
 
-  lib_stage.set_function("player_pos", [=]() -> cmplx {
-    return {scene->player.pos().x, scene->player.pos().y};
-  });
+  lib_stage.set_function(
+    "player_pos", [=]() -> cmplx { return {scene->player.pos().x, scene->player.pos().y}; });
 
   lib_stage.set_function("cowait",
                          sol::yielding([=](u32 time) { scene->task_wait_ticks = time; }));
@@ -149,8 +148,8 @@ sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<stage_scene> scene
 
 stage_scene::stage_scene(u32 max_entities, player_entity&& player_,
                          std::vector<assets::sprite_atlas>&& atlas_assets_) :
-    projs{},
-    bosses{}, boss_count{0u}, player{std::move(player_)}, atlas_assets{std::move(atlas_assets_)},
+    projs{}, bosses{}, boss_count{0u}, player{std::move(player_)},
+    atlas_assets{std::move(atlas_assets_)},
     renderer{okuu::render::stage_renderer::create(max_entities).value()}, task_wait_ticks{0u},
     ticks{0u} {}
 
@@ -198,14 +197,15 @@ void stage_scene::render(double dt, double alpha) {
       .texture = tex,
       .ticks = this->ticks,
       .uvs = uvs,
+      .color = {1.f, 1.f, 1.f, 1.f},
     });
   };
 
-  for (u32 i = 0; i < this->boss_count; ++i) {
-    const auto& boss = bosses[i];
-    NTF_ASSERT(boss.has_value());
-    render_sprite(*boss);
-  }
+  // for (u32 i = 0; i < this->boss_count; ++i) {
+  //   const auto& boss = bosses[i];
+  //   NTF_ASSERT(boss.has_value());
+  //   render_sprite(*boss);
+  // }
 
   render_sprite(player);
 
