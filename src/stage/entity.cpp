@@ -178,13 +178,14 @@ void player_entity::tick() {
       break;
   }
   _anim_state = next_state;
-  // _animator.tick();
+  _animator.tick();
   ++_ticks;
 }
 
-mat4 player_entity::transform() const {
+mat4 player_entity::transform(const render::sprite_uvs& uvs) const {
   shogle::transform2d<real> t{};
-  t.pos(_pos).scale(50.f);
+  f32 ratio = uvs.x_lin / uvs.y_lin;
+  t.pos(_pos).scale(80.f * ratio, 80.f);
   mat4 mat = t.world();
   return mat;
 }

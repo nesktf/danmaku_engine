@@ -7,8 +7,7 @@ sprite_atlas::sprite_atlas(shogle::texture2d&& tex, ntf::unique_array<render::sp
                            std::unordered_map<std::string, u32>&& sprite_map,
                            ntf::unique_array<anim_meta>&& anim_pos,
                            std::unordered_map<std::string, u32>&& anim_map) :
-    _tex{std::move(tex)},
-    _sprite_uvs{std::move(uvs)}, _sprite_map{std::move(sprite_map)},
+    _tex{std::move(tex)}, _sprite_uvs{std::move(uvs)}, _sprite_map{std::move(sprite_map)},
     _anim_pos{std::move(anim_pos)}, _anim_map{std::move(anim_map)} {}
 
 expect<sprite_atlas> sprite_atlas::from_chima(const chima::spritesheet& sheet) {
@@ -16,11 +15,16 @@ expect<sprite_atlas> sprite_atlas::from_chima(const chima::spritesheet& sheet) {
     const auto sprites = sheet.sprites();
     ntf::unique_array<render::sprite_uvs> uvs(sprites.size());
     std::unordered_map<std::string, u32> sprite_map;
+    auto [atlas_width, atlas_height] = sheet.atlas_extent();
     for (u32 i = 0; const auto& sprite : sprites) {
-      uvs[i].x_lin = sprite.uv_x_lin;
-      uvs[i].x_con = sprite.uv_x_con;
-      uvs[i].y_lin = sprite.uv_y_lin;
-      uvs[i].y_con = sprite.uv_y_con;
+      // uvs[i].x_lin = sprite.uv_x_lin;
+      // uvs[i].x_con = sprite.uv_x_con;
+      // uvs[i].y_lin = sprite.uv_y_lin;
+      // uvs[i].y_con = sprite.uv_y_con;
+      uvs[i].x_lin = (f32)sprite.width / (f32)atlas_width;
+      uvs[i].y_lin = (f32)sprite.height / (f32)atlas_height;
+      uvs[i].x_con = (f32)sprite.x_off / (f32)atlas_width;
+      uvs[i].y_con = (f32)sprite.y_off / (f32)atlas_width;
 
       std::string name{sprite.name.data, sprite.name.length};
       [[maybe_unused]] auto [it, empl] = sprite_map.try_emplace(std::move(name), i);

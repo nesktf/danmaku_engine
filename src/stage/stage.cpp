@@ -193,7 +193,7 @@ void stage_scene::render(double dt, double alpha) {
     const auto [atlas, idx] = entity.sprite();
     const auto [tex, uvs] = atlas->render_data(idx);
     this->renderer.enqueue_sprite({
-      .transform = entity.transform(),
+      .transform = entity.transform(uvs),
       .texture = tex,
       .ticks = this->ticks,
       .uvs = uvs,

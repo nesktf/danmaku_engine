@@ -142,7 +142,7 @@ public:
 public:
   void tick();
 
-  mat4 transform() const;
+  mat4 transform(const render::sprite_uvs& uvs) const;
 
   entity_sprite sprite() const;
 
