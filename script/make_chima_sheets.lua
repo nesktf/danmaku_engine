@@ -213,18 +213,10 @@ local cirno_data = {
 local images = {
   {name = "marisa0", path = "../temp/sprite_thing/flani_mari.png"},
   {name = "reimu0", path = "../temp/sprite_thing/flani_remu.png"},
+  {name = "cirno0", path = "../temp/sprite_thing/flani_cirno.png"}
 }
 local padding = 2
 local output_chara = "chara"
-local output_effects = "effects"
-
-do
-  local imgs, anims = parse_old_sheet("../res/spritesheet/effects.json", "../res/spritesheet/effects.png")
-  local sheet = chima.spritesheet.new(ctx, padding, imgs, collect_anims(anims))
-  print(inspect(sheet))
-  sheet.atlas:write(output_effects..".png", chima.image.format.png)
-  sheet:write(output_effects..".chima")
-end
 
 do
   local all_frames = {}
@@ -241,6 +233,17 @@ do
     local img = chima.image.load(ctx, image_data.name, image_data.path)
     table.insert(imgs, img)
   end
+
+  local sheet_imgs, sheet_anims = parse_old_sheet("../temp/spritesheet/effects.json", "../temp/spritesheet/effects.png")
+
+  for _, img in ipairs(sheet_imgs) do
+    table.insert(imgs, img)
+  end
+  local temp_anim = collect_anims(sheet_anims)
+  for _, anim in ipairs(temp_anim) do
+    table.insert(anims, anim)
+  end
+
   local sheet = chima.spritesheet.new(ctx, padding, imgs, anims)
   print(inspect(sheet))
   for i = 0, sheet.sprite_count-1 do
@@ -253,4 +256,5 @@ do
 
   sheet.atlas:write(output_chara..".png", chima.image.format.png)
   sheet:write(output_chara..".chima")
+  print("Done!")
 end

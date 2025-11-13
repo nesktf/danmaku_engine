@@ -7,13 +7,11 @@ using namespace ntf::numdefs;
 
 static okuu::expect<okuu::stage::lua_env> load_stage(chima::context& chima) {
   chima::spritesheet chara_sheet{chima, "res/packages/test/chara.chima"};
-  chima::spritesheet effect_sheet{chima, "res/packages/test/effects.chima"};
 
   std::vector<okuu::assets::sprite_atlas> resources;
-  resources.reserve(2);
+  resources.reserve(1);
   auto& chara_atlas =
     resources.emplace_back(okuu::assets::sprite_atlas::from_chima(chara_sheet).value());
-  resources.emplace_back(okuu::assets::sprite_atlas::from_chima(effect_sheet).value());
 
   auto cirno_idle = chara_atlas.find_animation("chara_cirno.idle").value();
   auto cirno_right = chara_atlas.find_animation("chara_cirno.right").value();
@@ -42,7 +40,7 @@ static okuu::expect<okuu::stage::lua_env> load_stage(chima::context& chima) {
   return okuu::stage::lua_env::load("res/packages/test/main.lua", std::move(scene));
 }
 
-void engine_run() {
+static void engine_run() {
   auto _rh = okuu::render::init();
 
   chima::context chima;
