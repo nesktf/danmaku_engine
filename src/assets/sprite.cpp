@@ -80,45 +80,58 @@ auto sprite_atlas::render_data(sprite spr) const
 u32 sprite_atlas::anim_length(animation anim) const {
   const u32 anim_idx = static_cast<u32>(anim);
   NTF_ASSERT(anim_idx < _anim_pos.size());
-  return _anim_pos[anim_idx].count;
+  const auto& anim_data = _anim_pos[anim_idx];
+
+  return anim_data.count * GAME_UPS / anim_data.fps;
 }
 
 auto sprite_atlas::anim_sprite_at(animation anim, u32 tick) const -> sprite {
   const u32 anim_idx = static_cast<u32>(anim);
   NTF_ASSERT(anim_idx < _anim_pos.size());
   const auto& anim_data = _anim_pos[anim_idx];
-  const u32 frame_idx = anim_data.start_idx + (tick % anim_length(anim));
+
+  const u32 tps = GAME_UPS / anim_data.fps;
+  tick = tick / tps;
+
+  const u32 frame_idx = anim_data.start_idx + (tick % anim_data.count);
+
   NTF_ASSERT(frame_idx < _sprite_uvs.size());
+
   return static_cast<sprite>(frame_idx);
 }
 
-sprite_animator::sprite_animator(const sprite_atlas& atlas, sprite_atlas::animation first_anim) :
-    _atlas{atlas}, _anim_queue{} {
-  enqueue(first_anim, 0);
+sprite_animator::sprite_animator(const sprite_atlas& atlas, sprite_atlas::animation first_anim,
+                                 u32 modifier) : _atlas{atlas}, _anim_queue{} {
+  enqueue(first_anim, 0, modifier);
 }
 
-void sprite_animator::enqueue(sprite_atlas::animation anim, u32 loops) {
+void sprite_animator::enqueue(sprite_atlas::animation anim, u32 loops, u32 modifier) {
+  const u32 anim_len = loops * _atlas->anim_length(anim);
   const anim_entry entry{
     .anim = anim,
-    .duration = loops * _atlas->anim_length(anim),
-    .timer = 0,
+    .duration = anim_len,
+    .timer = modifier & ANIM_BACKWARDS ? anim_len : 0,
+    .modifier = modifier,
   };
   _anim_queue.push(entry);
 }
 
-void sprite_animator::enqueue_frames(sprite_atlas::animation anim, u32 frames) {
-  enqueue(anim, 0);
+void sprite_animator::enqueue_frames(sprite_atlas::animation anim, u32 frames, u32 modifier) {
+  enqueue(anim, 0, modifier);
   _anim_queue.back().duration = frames;
+  if (modifier & ANIM_BACKWARDS) {
+    _anim_queue.back().timer = frames;
+  }
 }
 
-void sprite_animator::soft_switch(sprite_atlas::animation anim, u32 loops) {
+void sprite_animator::soft_switch(sprite_atlas::animation anim, u32 loops, u32 modifier) {
   _reset_queue(false);
-  enqueue(anim, loops);
+  enqueue(anim, loops, modifier);
 }
 
-void sprite_animator::hard_switch(sprite_atlas::animation anim, u32 loops) {
+void sprite_animator::hard_switch(sprite_atlas::animation anim, u32 loops, u32 modifier) {
   _reset_queue(true);
-  enqueue(anim, loops);
+  enqueue(anim, loops, modifier);
 }
 
 void sprite_animator::_reset_queue(bool hard) {
@@ -136,18 +149,31 @@ void sprite_animator::_reset_queue(bool hard) {
 }
 
 void sprite_animator::tick() {
-  auto& next = _anim_queue.front();
-  const u32 anim_len = _atlas->anim_length(next.anim);
-  auto& timer = next.timer;
-  ++timer;
-  if (timer >= next.duration && _anim_queue.size() > 1 && timer % anim_len == 0) {
+  auto& curr_anim = _anim_queue.front();
+
+  bool pop_anim = false;
+  if (curr_anim.modifier & ANIM_BACKWARDS) {
+    --curr_anim.timer;
+    pop_anim = curr_anim.timer == 0 || curr_anim.timer > curr_anim.duration; // check overflow
+  } else {
+    ++curr_anim.timer;
+    pop_anim = curr_anim.timer >= curr_anim.duration;
+  }
+  if (pop_anim && _anim_queue.size() > 1) {
     _anim_queue.pop();
   }
 }
 
-sprite_atlas::sprite sprite_animator::frame() const {
+std::pair<sprite_atlas::sprite, vec2> sprite_animator::frame() const {
   const auto& next = _anim_queue.front();
-  return _atlas->anim_sprite_at(next.anim, next.timer);
+  const auto idx = _atlas->anim_sprite_at(next.anim, next.timer);
+
+  const bool mirror_x = next.modifier & ANIM_MIRROR_X;
+  const bool mirror_y = next.modifier & ANIM_MIRROR_Y;
+  const vec2 uv_modifier{(-1.f * mirror_x) + (1.f * !mirror_x),
+                         (-1.f * mirror_y) + (1.f * !mirror_y)};
+
+  return {idx, uv_modifier};
 }
 
 } // namespace okuu::assets

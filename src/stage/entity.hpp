@@ -12,8 +12,7 @@ using shogle::vec2;
 using shogle::vec3;
 using real = f32;
 
-using entity_sprite =
-  std::pair<ntf::weak_cptr<assets::sprite_atlas>, assets::sprite_atlas::sprite>;
+using entity_sprite = std::pair<shogle::texture2d_view, render::sprite_uvs>;
 
 class entity_movement {
 private:
@@ -134,7 +133,8 @@ public:
     ANIM_COUNT,
   };
 
-  using animation_data = std::array<assets::sprite_atlas::animation, ANIM_COUNT>;
+  using anim_pair = std::pair<assets::sprite_atlas::animation, u32>;
+  using animation_data = std::array<anim_pair, ANIM_COUNT>;
 
 public:
   player_entity(vec2 pos, animation_data&& anims, assets::sprite_animator&& animator);

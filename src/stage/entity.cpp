@@ -11,9 +11,8 @@ entity_movement::entity_movement(vec2 vel, vec2 acc, real ret) noexcept :
 
 entity_movement::entity_movement(vec2 vel, vec2 acc, real ret, vec2 attr, vec2 attr_p,
                                  real attr_exp) noexcept :
-    _vel{vel.x, vel.y},
-    _acc{acc.x, acc.y}, _ret{ret}, _attr{attr.x, attr.y}, _attr_p{attr_p.x, attr_p.y},
-    _attr_exp{attr_exp} {}
+    _vel{vel.x, vel.y}, _acc{acc.x, acc.y}, _ret{ret}, _attr{attr.x, attr.y},
+    _attr_p{attr_p.x, attr_p.y}, _attr_exp{attr_exp} {}
 
 void entity_movement::next_pos(vec2& curr_pos) {
   cmplx pos{curr_pos.x, curr_pos.y};
@@ -57,9 +56,8 @@ entity_movement entity_movement::move_towards(vec2 target, vec2 vel, vec2 attr, 
 
 projectile_entity::projectile_entity(u32 birth, vec2 pos, vec2 scale, real angular_speed,
                                      entity_sprite sprite, entity_movement movement) :
-    _birth{birth},
-    _ticks{0}, _pos{pos}, _scale{scale}, _rot{0.f}, _angular_speed{angular_speed}, _flags{0},
-    _movement{movement}, _sprite{sprite} {}
+    _birth{birth}, _ticks{0}, _pos{pos}, _scale{scale}, _rot{0.f}, _angular_speed{angular_speed},
+    _flags{0}, _movement{movement}, _sprite{sprite} {}
 
 void projectile_entity::tick() {
   _movement.next_pos(_pos);
@@ -95,8 +93,7 @@ entity_sprite boss_entity::sprite() const {
 
 player_entity::player_entity(vec2 pos, animation_data&& anims,
                              assets::sprite_animator&& animator) :
-    _ticks{0},
-    _pos{pos}, _vel{}, _flags{0}, _animator{std::move(animator)},
+    _ticks{0}, _pos{pos}, _vel{}, _flags{0}, _animator{std::move(animator)},
     _anim_state{animation_state::IDLE}, _anims{std::move(anims)} {}
 
 void player_entity::tick() {
@@ -134,7 +131,7 @@ void player_entity::tick() {
     // const vec2 clamp_min{0.f};
     // const vec2 clamp_max{VIEWPORT};
     _vel = vel;
-    _pos += vel * 8.f;
+    _pos += vel * 10.f;
   }
 
   animation_state next_state = IDLE;
@@ -147,33 +144,33 @@ void player_entity::tick() {
   switch (_anim_state) {
     case IDLE: {
       if (next_state == LEFT) {
-        _animator.hard_switch(_anims[IDLE_TO_LEFT], 1);
-        _animator.enqueue(_anims[LEFT], 0);
+        _animator.hard_switch(_anims[IDLE_TO_LEFT].first, 1, _anims[IDLE_TO_LEFT].second);
+        _animator.enqueue(_anims[LEFT].first, 0, _anims[LEFT].second);
       } else if (next_state == RIGHT) {
-        _animator.hard_switch(_anims[IDLE_TO_RIGHT], 1);
-        _animator.enqueue(_anims[RIGHT], 0);
+        _animator.hard_switch(_anims[IDLE_TO_RIGHT].first, 1, _anims[IDLE_TO_LEFT].second);
+        _animator.enqueue(_anims[RIGHT].first, 0, _anims[RIGHT].second);
       }
       break;
     }
     case RIGHT: {
       if (next_state == IDLE) {
-        _animator.hard_switch(_anims[RIGHT_TO_IDLE], 1);
-        _animator.enqueue(_anims[IDLE], 0);
+        _animator.hard_switch(_anims[RIGHT_TO_IDLE].first, 1, _anims[RIGHT_TO_IDLE].second);
+        _animator.enqueue(_anims[IDLE].first, 0, _anims[RIGHT_TO_IDLE].second);
       } else if (next_state == LEFT) {
-        _animator.hard_switch(_anims[RIGHT_TO_IDLE], 1);
-        _animator.enqueue(_anims[IDLE_TO_LEFT], 1);
-        _animator.enqueue(_anims[LEFT], 0);
+        _animator.hard_switch(_anims[RIGHT_TO_IDLE].first, 1, _anims[RIGHT_TO_IDLE].second);
+        _animator.enqueue(_anims[IDLE_TO_LEFT].first, 1, _anims[IDLE_TO_LEFT].second);
+        _animator.enqueue(_anims[LEFT].first, 0, _anims[LEFT].second);
       }
       break;
     }
     case LEFT: {
       if (next_state == IDLE) {
-        _animator.hard_switch(_anims[LEFT_TO_IDLE], 1);
-        _animator.enqueue(_anims[IDLE], 0);
+        _animator.hard_switch(_anims[LEFT_TO_IDLE].first, 1, _anims[LEFT_TO_IDLE].second);
+        _animator.enqueue(_anims[IDLE].first, 0, _anims[IDLE].second);
       } else if (next_state == RIGHT) {
-        _animator.hard_switch(_anims[LEFT_TO_IDLE], 1);
-        _animator.enqueue(_anims[IDLE_TO_RIGHT], 1);
-        _animator.enqueue(_anims[RIGHT], 0);
+        _animator.hard_switch(_anims[LEFT_TO_IDLE].first, 1, _anims[LEFT_TO_IDLE].second);
+        _animator.enqueue(_anims[IDLE_TO_RIGHT].first, 1, _anims[IDLE_TO_RIGHT].second);
+        _animator.enqueue(_anims[RIGHT].first, 0, _anims[RIGHT].second);
       }
       break;
     }
@@ -194,7 +191,12 @@ mat4 player_entity::transform(const render::sprite_uvs& uvs) const {
 }
 
 entity_sprite player_entity::sprite() const {
-  return {_animator.atlas(), _animator.frame()};
+  const auto [idx, uv_modifier] = _animator.frame();
+  const auto& atlas = _animator.atlas();
+  auto render_data = atlas.render_data(idx);
+  render_data.second.x_lin *= uv_modifier.x;
+  render_data.second.y_lin *= uv_modifier.y;
+  return render_data;
 }
 
 } // namespace okuu::stage

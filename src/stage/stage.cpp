@@ -70,15 +70,16 @@ sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<stage_scene> scene
       return;
     }
 
-    auto [atlas_idx, sprite] = scene->find_sprite("ball_solid").value();
-    const auto& atlas = scene->atlas_assets[atlas_idx];
-    entity_sprite boss_sprite{atlas, sprite};
-    const vec2 boss_pos{p0.real(), p0.imag()};
-    const auto mov = entity_movement::move_towards({p1.real(), p1.imag()}, DT * vec2{10.f, 10.f},
-                                                   vec2{DT, DT}, .8f);
-
-    const u32 boss_idx = scene->boss_count;
-    scene->bosses[boss_idx].emplace(0u, boss_pos, boss_sprite, mov);
+    // auto [atlas_idx, sprite] = scene->find_sprite("ball_solid").value();
+    // const auto& atlas = scene->atlas_assets[atlas_idx];
+    // entity_sprite boss_sprite{atlas, sprite};
+    // const vec2 boss_pos{p0.real(), p0.imag()};
+    // const auto mov = entity_movement::move_towards({p1.real(), p1.imag()}, DT *
+    // vec2{10.f, 10.f},
+    //                                                vec2{DT, DT}, .8f);
+    //
+    // const u32 boss_idx = scene->boss_count;
+    // scene->bosses[boss_idx].emplace(0u, boss_pos, boss_sprite, mov);
     scene->boss_count++;
   });
 
@@ -190,8 +191,7 @@ void stage_scene::render(double dt, double alpha) {
   NTF_UNUSED(alpha);
 
   const auto render_sprite = [&](auto& entity) {
-    const auto [atlas, idx] = entity.sprite();
-    const auto [tex, uvs] = atlas->render_data(idx);
+    const auto [tex, uvs] = entity.sprite();
     this->renderer.enqueue_sprite({
       .transform = entity.transform(uvs),
       .texture = tex,

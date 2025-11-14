@@ -54,20 +54,30 @@ private:
     sprite_atlas::animation anim;
     u32 duration;
     u32 timer;
+    u32 modifier;
   };
 
 public:
-  sprite_animator(const sprite_atlas& atlas, sprite_atlas::animation first_anim);
+  enum anim_modifier {
+    ANIM_NO_MODIFIER = 0,
+    ANIM_BACKWARDS = 1 << 0,
+    ANIM_MIRROR_X = 1 << 1,
+    ANIM_MIRROR_Y = 1 << 2,
+  };
 
 public:
-  void enqueue(sprite_atlas::animation anim, u32 loops);
-  void enqueue_frames(sprite_atlas::animation anim, u32 frames);
-  void soft_switch(sprite_atlas::animation anim, u32 loops);
-  void hard_switch(sprite_atlas::animation anim, u32 loops);
+  sprite_animator(const sprite_atlas& atlas, sprite_atlas::animation first_anim,
+                  u32 modifier = ANIM_NO_MODIFIER);
+
+public:
+  void enqueue(sprite_atlas::animation anim, u32 loops, u32 modifier = ANIM_NO_MODIFIER);
+  void enqueue_frames(sprite_atlas::animation anim, u32 frames, u32 modifier = ANIM_NO_MODIFIER);
+  void soft_switch(sprite_atlas::animation anim, u32 loops, u32 modifier = ANIM_NO_MODIFIER);
+  void hard_switch(sprite_atlas::animation anim, u32 loops, u32 modifier = ANIM_NO_MODIFIER);
 
 public:
   void tick();
-  sprite_atlas::sprite frame() const;
+  std::pair<sprite_atlas::sprite, vec2> frame() const;
 
   const sprite_atlas& atlas() const { return *_atlas; }
 

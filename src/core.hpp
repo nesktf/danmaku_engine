@@ -26,4 +26,6 @@ using shogle::vec4;
 
 using color4 = vec4;
 
+static constexpr u32 GAME_UPS = 60;
+
 } // namespace okuu

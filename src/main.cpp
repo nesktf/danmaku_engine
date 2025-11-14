@@ -7,9 +7,16 @@ using namespace ntf::numdefs;
 
 static okuu::expect<okuu::stage::lua_env> load_stage(chima::context& chima) {
   chima::spritesheet chara_sheet{chima, "res/packages/test/chara.chima"};
+  for (auto& anim : chara_sheet.anims()) {
+    auto name = chima::to_str_view(anim.name);
+    if (name == "chara_cirno.idle") {
+      anim.fps = 20.f;
+    } else if (name.find("chara_") != std::string::npos) {
+      anim.fps = 30.f;
+    }
+  }
 
   std::vector<okuu::assets::sprite_atlas> resources;
-  resources.reserve(1);
   auto& chara_atlas =
     resources.emplace_back(okuu::assets::sprite_atlas::from_chima(chara_sheet).value());
 
@@ -22,13 +29,22 @@ static okuu::expect<okuu::stage::lua_env> load_stage(chima::context& chima) {
   okuu::assets::sprite_animator chara_animator{chara_atlas, cirno_idle};
 
   okuu::stage::player_entity::animation_data anims;
-  anims[okuu::stage::player_entity::IDLE] = cirno_idle;
-  anims[okuu::stage::player_entity::RIGHT] = cirno_right;
-  anims[okuu::stage::player_entity::RIGHT_TO_IDLE] = cirno_idle_right; // TODO: Invert this
-  anims[okuu::stage::player_entity::IDLE_TO_RIGHT] = cirno_idle_right;
-  anims[okuu::stage::player_entity::LEFT] = cirno_left;
-  anims[okuu::stage::player_entity::LEFT_TO_IDLE] = cirno_idle_left; // TODO: Invert this
-  anims[okuu::stage::player_entity::IDLE_TO_LEFT] = cirno_idle_left;
+  anims[okuu::stage::player_entity::IDLE] = {cirno_idle,
+                                             okuu::assets::sprite_animator::ANIM_NO_MODIFIER};
+  anims[okuu::stage::player_entity::RIGHT] = {cirno_right,
+                                              okuu::assets::sprite_animator::ANIM_NO_MODIFIER};
+  anims[okuu::stage::player_entity::RIGHT_TO_IDLE] = {
+    cirno_idle_right, okuu::assets::sprite_animator::ANIM_BACKWARDS};
+  anims[okuu::stage::player_entity::IDLE_TO_RIGHT] = {
+    cirno_idle_right,
+    okuu::assets::sprite_animator::ANIM_NO_MODIFIER,
+  };
+  anims[okuu::stage::player_entity::LEFT] = {cirno_left,
+                                             okuu::assets::sprite_animator::ANIM_NO_MODIFIER};
+  anims[okuu::stage::player_entity::LEFT_TO_IDLE] = {
+    cirno_idle_left, okuu::assets::sprite_animator::ANIM_BACKWARDS};
+  anims[okuu::stage::player_entity::IDLE_TO_LEFT] = {
+    cirno_idle_left, okuu::assets::sprite_animator::ANIM_NO_MODIFIER};
 
   okuu::stage::player_entity player{okuu::vec2{0.f, 0.f}, std::move(anims),
                                     std::move(chara_animator)};
@@ -55,7 +71,7 @@ static void engine_run() {
     },
     [&](u32) { stage.tick(); },
   };
-  shogle::render_loop(okuu::render::window(), okuu::render::shogle_ctx(), 60, loop);
+  shogle::render_loop(okuu::render::window(), okuu::render::shogle_ctx(), okuu::GAME_UPS, loop);
 }
 
 int main() {
