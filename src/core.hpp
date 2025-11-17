@@ -5,6 +5,8 @@
 #include <ntfstl/types.hpp>
 #include <shogle/math/vector.hpp>
 
+#define fn auto
+
 namespace okuu {
 
 template<typename T>

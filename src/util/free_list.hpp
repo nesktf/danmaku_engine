@@ -13,41 +13,43 @@ using namespace ntf::numdefs;
 
 template<typename T>
 class free_list {
+private:
+  struct storage {
+    ntf::nullable<T> obj;
+    u32 version;
+  };
+
 public:
   class element {
   public:
-    element(free_list& list, u32 idx) : _list{list}, _idx{idx} {}
+    element(free_list& list, u64 handle) : _list{list}, _handle{handle} {}
 
   public:
     T& operator*() {
-      NTF_ASSERT(_idx < _list->_elems.size());
-      auto& proj = _list->_elems[_idx];
-      NTF_ASSERT(proj.has_value());
-      return *proj;
+      NTF_ASSERT(_list._is_valid(_handle));
+      return _list._elem_at(_handle);
     }
 
     const T& operator*() const {
-      NTF_ASSERT(_idx < _list->_elems.size());
-      auto& proj = _list->_elems[_idx];
-      NTF_ASSERT(proj.has_value());
-      return *proj;
-    }
-
-    bool alive() const {
-      NTF_ASSERT(_idx < _list->_elems.size());
-      auto& proj = _list->_elems[_idx];
-      return proj.has_value();
+      NTF_ASSERT(_list._is_valid(_handle));
+      return _list._elem_at(_handle);
     }
 
     T* operator->() { return &**this; }
 
     const T* operator->() const { return &**this; }
 
-    u32 idx() const { return _idx; }
+    T& get() { return **this; }
+
+    const T& get() const { return **this; }
+
+    bool is_alive() const { return _list._is_valid(_handle); }
+
+    void kill() { _list->return_elem(*this); }
 
   private:
     ntf::weak_ptr<free_list> _list;
-    u32 _idx;
+    u64 _handle;
 
     friend class free_list;
   };
@@ -61,37 +63,85 @@ public:
   template<typename... Args>
   element request_elem(Args&&... args) {
     if (!_free.empty()) {
-      const u32 pos = _free.back();
+      const u32 idx = _free.back();
       _free.pop();
-      auto& elem = _elems[pos];
-      elem.emplace(std::forward<Args>(args)...);
-      return {*this, pos};
+      auto& elem = _elems[idx];
+      NTF_ASSERT(!elem.obj.has_value());
+      elem.obj.emplace(std::forward<Args>(args)...);
+      ++elem.version;
+      return {*this, _compose_handle(idx, elem.version)};
     }
 
-    _elems.emplace(std::in_place, std::forward<Args>(args)...);
-    return {*this, static_cast<u32>(_elems.size()) - 1u};
+    const u32 idx = _elems.size() - 1u;
+    auto& elem = _elems.emplace_back(ntf::nullopt, 0);
+    elem.emplace(std::forward<Args>(args)...);
+    return {*this, _compose_handle(idx, elem.version)};
   }
 
-  void return_elem(element elem) {
-    const u32 idx = elem._idx;
+  free_list& return_elem(element ret) {
+    const auto [idx, _] = _decompose_handle(ret._handle);
     NTF_ASSERT(idx < _elems.size());
-    auto& proj = _elems[idx];
-    NTF_ASSERT(proj.has_value());
-    proj.reset();
+    auto& elem = _elems[idx];
+    NTF_ASSERT(elem.obj.has_value());
+    elem.reset();
     _free.push(idx);
+    return *this;
   }
 
   void clear() {
-    _elems.clear();
+    for (auto& elem : _elems) {
+      if (elem.obj.has_value()) {
+        elem.obj.reset();
+      }
+      ++elem.version;
+    }
     while (!_free.empty()) {
       _free.pop();
     }
   }
 
-  // ntf::cspan<ntf::nullable<T>> elems() const { return {_elems.data(), _elems.size()}; }
+  template<typename F>
+  free_list& for_each(F&& func) {
+    for (auto& [elem, _] : _elems) {
+      if (elem.has_value()) {
+        std::invoke(func, *elem);
+      }
+    }
+    return *this;
+  }
+
+  template<typename F>
+  const free_list& for_each(F&& func) const {
+    for (auto& [elem, _] : _elems) {
+      if (elem.has_value()) {
+        std::invoke(func, *elem);
+      }
+    }
+    return *this;
+  }
 
 private:
-  std::vector<ntf::nullable<T>> _elems;
+  bool _is_valid(u64 handle) const {
+    const auto [idx, ver] = _decompose_handle(handle);
+    if (idx > _elems.size()) {
+      return false;
+    }
+    const auto& elem = _elems[idx];
+    if (!elem.has_value() || elem.version != ver) {
+      return false;
+    }
+
+    return true;
+  }
+
+  static u64 _compose_handle(u32 idx, u32 ver) { return (ver << 32) | idx; }
+
+  static std::pair<u32, u32> _decompose_handle(u64 handle) {
+    return {handle & 0xFFFFFFFF, handle >> 32};
+  }
+
+private:
+  std::vector<storage> _elems;
   std::queue<u32> _free;
 };
 

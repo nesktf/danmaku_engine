@@ -1,3 +1,7 @@
+#define OKUU_SOL_IMPL
+#include "sol.hpp"
+
+#include "assets/package.hpp"
 #include "stage/stage.hpp"
 
 #include <ntfstl/logger.hpp>
@@ -60,6 +64,11 @@ static void engine_run() {
   auto _rh = okuu::render::init();
 
   chima::context chima;
+  sol::state cfg_lua;
+  auto package =
+    okuu::assets::lua_package_cfg::load_config(cfg_lua, "res/packages/test/config.lua", chima)
+      .value();
+
   auto stage = load_stage(chima).value();
 
   float t = 0.f;
