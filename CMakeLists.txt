@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
+include(ExternalProject)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -7,32 +8,37 @@ project(okuu CXX C)
 set(LIB_INCLUDE)
 set(LIB_LINK)
 
-# shogle
-set(SHOGLE_LIB "lib/shogle")
-add_subdirectory(${SHOGLE_LIB})
-list(APPEND LIB_INCLUDE "${SHOGLE_LIB}/shogle")
-list(APPEND LIB_LINK shogle)
-
 # luajit
 find_package(PkgConfig REQUIRED)
 pkg_search_module(LuaJIT REQUIRED luajit)
 list(APPEND LIB_INCLUDE ${LuaJIT_INCLUDE_DIRS})
 list(APPEND LIB_LINK ${LuaJIT_LIBRARIES})
 
-# chimatools
-set(CHIMA_LIB "lib/chimatools")
-list(APPEND LIB_INCLUDE "${CHIMA_LIB}/include")
-list(APPEND LIB_LINK chimatools)
-
 # sol2
 set(SOL2_ENABLE_INSTALL OFF)
 set(SOL2_LUA_VERSION "LuaJIT")
 set(SOL2_BUILD_LUA FALSE)
 set(SOL2_SYSTEM_INCLUDE OFF)
-# set(SOL2_SINGLE ON)
 add_subdirectory("lib/sol2")
 list(APPEND LIB_LINK sol2::sol2)
 list(APPEND LIB_INCLUDE sol2::sol2)
+
+# shogle
+add_subdirectory("lib/shogle")
+list(APPEND LIB_INCLUDE shogle)
+list(APPEND LIB_LINK shogle)
+
+# chimatools
+ExternalProject_Add(chimatools
+  SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/chimatools"
+  BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/lib/chimatools"
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND make -C <SOURCE_DIR> BUILD_DIR=<BINARY_DIR> lib
+  BUILD_BYPRODUCTS <BINARY_DIR>/libchimatools.a
+  INSTALL_COMMAND ""
+)
+list(APPEND LIB_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/lib/chimatools/include")
+list(APPEND LIB_LINK "${CMAKE_CURRENT_BINARY_DIR}/lib/chimatools/libchimatools.a")
 
 # file(GLOB_RECURSE SOURCE_FILES "src/*.cpp")
 list(APPEND SOURCE_FILES
