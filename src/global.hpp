@@ -8,17 +8,6 @@
 
 #include <shogle/engine.hpp>
 
-using real = float;
-
-using ntf::vec2;
-using ntf::vec3;
-using ntf::vec4;
-using ntf::ivec2;
-using ntf::cmplx;
-
-using ntf::mat3;
-using ntf::mat4;
-
 using ntf::color3;
 using ntf::color4;
 
@@ -34,13 +23,14 @@ using window_type = glfw::window<renderer>;
 using imgui_type = imgui::imgui_lib<imgui::glfw_gl3_impl>;
 
 const constexpr uint UPS = 60;
-const constexpr float DT = 1.f/UPS;
-const constexpr float VIEWPORT_RATIO = 6.f/7.f;
+const constexpr float DT = 1.f / UPS;
+const constexpr float VIEWPORT_RATIO = 6.f / 7.f;
 
-const constexpr ivec2 WIN_SIZE {1280, 720};
-const constexpr ivec2 VIEWPORT {600, 700};
+const constexpr ivec2 WIN_SIZE{1280, 720};
+const constexpr ivec2 VIEWPORT{600, 700};
 
 constexpr std::string_view stlib_key = "okuu";
+
 // const constexpr ivec2 VIEWPORT = {880, 660};
 
 namespace global {

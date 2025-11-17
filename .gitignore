@@ -4,3 +4,4 @@ imgui.ini
 res/_temp/
 res/fonts/
 temp/
+.project.toml*

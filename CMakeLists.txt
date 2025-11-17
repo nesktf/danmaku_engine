@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-project(danmaku_engine CXX C)
+project(okuu CXX C)
 
 set(LIB_INCLUDE)
 set(LIB_LINK)
@@ -19,7 +19,31 @@ pkg_search_module(LuaJIT REQUIRED luajit)
 list(APPEND LIB_INCLUDE ${LuaJIT_INCLUDE_DIRS})
 list(APPEND LIB_LINK ${LuaJIT_LIBRARIES})
 
-file(GLOB_RECURSE SOURCE_FILES "src/*.cpp")
+# chimatools
+set(CHIMA_LIB "lib/chimatools")
+list(APPEND LIB_INCLUDE "${CHIMA_LIB}/include")
+list(APPEND LIB_LINK chimatools)
+
+# sol2
+set(SOL2_ENABLE_INSTALL OFF)
+set(SOL2_LUA_VERSION "LuaJIT")
+set(SOL2_BUILD_LUA FALSE)
+set(SOL2_SYSTEM_INCLUDE OFF)
+# set(SOL2_SINGLE ON)
+add_subdirectory("lib/sol2")
+list(APPEND LIB_LINK sol2::sol2)
+list(APPEND LIB_INCLUDE sol2::sol2)
+
+# file(GLOB_RECURSE SOURCE_FILES "src/*.cpp")
+list(APPEND SOURCE_FILES
+  src/render/instance.cpp
+  src/render/shader_src.cpp
+  src/render/stage.cpp
+  src/stage/entity.cpp
+  src/stage/stage.cpp
+  src/assets/sprite.cpp
+  src/main.cpp
+)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -Wall -Wextra -Wpedantic -O0 -g2 -ggdb -Wno-psabi")
@@ -28,4 +52,4 @@ set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -Wall -Wextra -Wpedantic -O3 -Wno-ps
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 target_include_directories(${PROJECT_NAME} PUBLIC lib src ${LIB_INCLUDE})
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 20)
-target_link_libraries(${PROJECT_NAME} shogle ${LIB_LINK})
+target_link_libraries(${PROJECT_NAME} ${LIB_LINK})

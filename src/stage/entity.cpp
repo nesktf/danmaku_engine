@@ -1,205 +1,202 @@
-#include "stage/entity.hpp"
+#include "./entity.hpp"
+#include "../render/instance.hpp"
 
-#include "input.hpp"
+namespace okuu::stage {
 
-namespace stage {
+entity_movement::entity_movement() noexcept :
+    _vel{}, _acc{}, _ret{}, _attr{}, _attr_p{}, _attr_exp{} {}
 
-void entity_movement::tick(ntf::transform2d& transform) {
-  // const cmplx v0 = vel;
-  cmplx pos = transform.cpos();
+entity_movement::entity_movement(vec2 vel, vec2 acc, real ret) noexcept :
+    _vel{vel.x, vel.y}, _acc{acc.x, acc.y}, _ret{ret}, _attr{}, _attr_p{}, _attr_exp{} {}
 
-  pos += vel;
-  vel = acc + ret*vel;
+entity_movement::entity_movement(vec2 vel, vec2 acc, real ret, vec2 attr, vec2 attr_p,
+                                 real attr_exp) noexcept :
+    _vel{vel.x, vel.y}, _acc{acc.x, acc.y}, _ret{ret}, _attr{attr.x, attr.y},
+    _attr_p{attr_p.x, attr_p.y}, _attr_exp{attr_exp} {}
 
-  if (attr != cmplx{}) {
-    const cmplx av = attr_p - pos;
-    if (attr_exp == 1) {
-      vel += attr*av;
+void entity_movement::next_pos(vec2& curr_pos) {
+  cmplx pos{curr_pos.x, curr_pos.y};
+  pos += _vel;
+  _vel = _acc + (_ret * _vel);
+
+  if (_attr != cmplx{}) {
+    const cmplx av = _attr_p - pos;
+    if (_attr_exp == 1) {
+      _vel += _attr * av;
     } else {
-      real norm2 = math::norm2(av);
-      norm2 = std::pow(norm2, attr_exp - .5f);
-      vel += attr + (av*norm2);
+      real norm2 = (av.real() * av.real()) + (av.imag() * av.imag());
+      norm2 = std::pow(norm2, _attr_exp - .5f);
+      _vel += _attr + (av * norm2);
     }
   }
-
-  transform.pos(pos);
+  curr_pos.x = pos.real();
+  curr_pos.y = pos.imag();
 }
 
-
-void entity_animator::tick(frames entity_ticks) {
-  if (!use_sequence) {
-    return;
-  }
-
-  const auto& seq = handle->sequence_at(sequence);
-  index = seq[entity_ticks%seq.size()];
+entity_movement entity_movement::move_linear(vec2 vel) {
+  return {vel, vec2{0.f}, 1.f};
 }
 
-res::sprite entity_animator::sprite() const {
-  return res::sprite{handle, index};
+entity_movement entity_movement::move_interpolated(vec2 vel0, vec2 vel1, real ret) {
+  const vec2 end_vel = vel1 * (1.f - ret);
+  return {vel0, end_vel, ret};
 }
 
-
-entity_animator entity_animator_static(res::atlas atlas,
-                                       res::atlas_type::texture_handle index) {
-  return entity_animator {
-    .handle = atlas,
-    .index = index,
-    .use_sequence = false,
-  };
+entity_movement entity_movement::move_interpolated_halflife(vec2 vel0, vec2 vel1, real hl) {
+  return move_interpolated(vel0, vel1, std::exp2(-1.f / hl));
 }
 
-entity_animator entity_animator_sequence(res::atlas atlas,
-                                         res::atlas_type::sequence_handle seq) {
-  return entity_animator {
-    .handle = atlas,
-    .sequence = seq,
-    .use_sequence = true,
-  };
+entity_movement entity_movement::move_interplated_simple(vec2 vel, real boost) {
+  return move_interpolated(vel * (1.f + boost), vel, .8f);
 }
 
-entity_movement entity_movement_linear(cmplx vel) {
-  return entity_movement {
-    .vel = vel,
-    .acc = 0,
-    .ret = 1,
-  };
+entity_movement entity_movement::move_towards(vec2 target, vec2 vel, vec2 attr, real ret) {
+  return {vel, vec2{0.f}, ret, attr, target, 1.f};
 }
 
-entity_movement entity_movement_interp(cmplx vel0, cmplx vel1, real ret) {
-  return entity_movement {
-    .vel = vel0,
-    .acc = vel1*(1-ret),
-    .ret = ret,
-  };
+projectile_entity::projectile_entity(u32 birth, vec2 pos, vec2 scale, real angular_speed,
+                                     entity_sprite sprite, entity_movement movement) :
+    _birth{birth}, _ticks{0}, _pos{pos}, _scale{scale}, _rot{0.f}, _angular_speed{angular_speed},
+    _flags{0}, _movement{movement}, _sprite{sprite} {}
+
+void projectile_entity::tick() {
+  _movement.next_pos(_pos);
+  _rot += _angular_speed;
+  ++_ticks;
 }
 
-entity_movement entity_movement_interp_hl(cmplx vel0, cmplx vel1, real hl) {
-  return entity_movement_interp(vel0, vel1, std::exp2(-1.f/hl));
+mat4 projectile_entity::transform() const {
+  shogle::basic_transform<real, shogle::trs_transform<real, 2>, 2, true> t{};
+  t.pos(_pos).scale(_scale).rot(vec3{0.f, 0.f, _rot});
+  mat4 mat = t.world();
+  return mat;
 }
 
-entity_movement entity_movement_interp_simple(cmplx vel, real boost) {
-  return entity_movement_interp(vel*(1+boost), vel, .8f);
+boss_entity::boss_entity(u32 birth, vec2 pos, entity_sprite sprite, entity_movement movement) :
+    _birth{birth}, _ticks{0}, _pos{pos}, _movement{movement}, _flags{0}, _sprite{sprite} {}
+
+void boss_entity::tick() {
+  _movement.next_pos(_pos);
+  ++_ticks;
 }
 
-entity_movement entity_movement_towards(cmplx target, cmplx vel, cmplx attr,
-                                        real ret) {
-  return entity_movement {
-    .vel = vel,
-    .ret = ret,
-    .attr = attr,
-    .attr_p = target,
-    .attr_exp = 1,
-  };
+mat4 boss_entity::transform() const {
+  shogle::transform2d<real> t{};
+  t.pos(_pos).scale(50.f);
+  mat4 mat = t.world();
+  return mat;
 }
 
-void player::movement_type::tick(ntf::transform2d& transform) {
+entity_sprite boss_entity::sprite() const {
+  return _sprite;
+}
+
+player_entity::player_entity(vec2 pos, animation_data&& anims,
+                             assets::sprite_animator&& animator) :
+    _ticks{0}, _pos{pos}, _vel{}, _flags{0}, _animator{std::move(animator)},
+    _anim_state{animation_state::IDLE}, _anims{std::move(anims)} {}
+
+void player_entity::tick() {
   cmplx move_dir{0.f};
+  const auto& win = render::window();
 
-  if (input::poll_key(input::keycode::key_a)) {
-    move_dir.real(-1.f);
-  } else if (input::poll_key(input::keycode::key_d)) {
-    move_dir.real(1.f);
+  {
+    if (win.poll_key(shogle::win_key::a) == shogle::win_action::press) {
+      move_dir.real(-1.f);
+    } else if (win.poll_key(shogle::win_key::d) == shogle::win_action::press) {
+      move_dir.real(1.f);
+    }
+
+    if (win.poll_key(shogle::win_key::w) == shogle::win_action::press) {
+      move_dir.imag(-1.f);
+    } else if (win.poll_key(shogle::win_key::s) == shogle::win_action::press) {
+      move_dir.imag(1.f);
+    }
+
+    real norm2 = shogle::norm2(move_dir);
+    if (norm2 > 0) {
+      move_dir /= glm::sqrt(norm2);
+    }
+
+    auto vel = _vel;
+    vel.x = move_dir.real();
+    vel.y = move_dir.imag();
+
+    const real slow_speed = .66f;
+    if (win.poll_key(shogle::win_key::l) == shogle::win_action::press) {
+      vel.x *= slow_speed;
+      vel.y *= slow_speed;
+    }
+
+    // const vec2 clamp_min{0.f};
+    // const vec2 clamp_max{VIEWPORT};
+    _vel = vel;
+    _pos += vel * 10.f;
   }
 
-  if (input::poll_key(input::keycode::key_w)) {
-    move_dir.imag(-1.f);
-  } else if (input::poll_key(input::keycode::key_s)) {
-    move_dir.imag(1.f);
-  }
-
-  real norm2 = math::norm2(move_dir);
-  if (norm2 > 0) {
-    move_dir /= glm::sqrt(norm2);
-  }
-
-  if (input::poll_key(input::keycode::key_l)) {
-    _vel = move_dir*slow_speed;
-  } else {
-    _vel = move_dir*base_speed;
-  }
-
-  const vec2 clamp_min{0.f};
-  const vec2 clamp_max{VIEWPORT};
-  transform.pos(glm::clamp(math::conv(transform.cpos() + _vel), clamp_min, clamp_max));
-}
-
-void player::animator_type::tick(const movement_type& movement) {
-  const auto vel = movement.vel();
   animation_state next_state = IDLE;
-  if (vel.real() > 0) {
+  if (_vel.x > 0.f) {
     next_state = RIGHT;
-  } else if (vel.real() < 0) {
+  } else if (_vel.x < 0.f) {
     next_state = LEFT;
   }
 
-  switch (_state) {
+  switch (_anim_state) {
     case IDLE: {
       if (next_state == LEFT) {
-        _animator.hard_switch(_anim[IDLE_TO_LEFT], 1);
-        _animator.enqueue_sequence(_anim[LEFT], 0);
+        _animator.hard_switch(_anims[IDLE_TO_LEFT].first, 1, _anims[IDLE_TO_LEFT].second);
+        _animator.enqueue(_anims[LEFT].first, 0, _anims[LEFT].second);
       } else if (next_state == RIGHT) {
-        _animator.hard_switch(_anim[IDLE_TO_RIGHT], 1);
-        _animator.enqueue_sequence(_anim[RIGHT], 0);
+        _animator.hard_switch(_anims[IDLE_TO_RIGHT].first, 1, _anims[IDLE_TO_LEFT].second);
+        _animator.enqueue(_anims[RIGHT].first, 0, _anims[RIGHT].second);
       }
       break;
     }
     case RIGHT: {
       if (next_state == IDLE) {
-        _animator.hard_switch(_anim[RIGHT_TO_IDLE], 1);
-        _animator.enqueue_sequence(_anim[IDLE], 0);
+        _animator.hard_switch(_anims[RIGHT_TO_IDLE].first, 1, _anims[RIGHT_TO_IDLE].second);
+        _animator.enqueue(_anims[IDLE].first, 0, _anims[RIGHT_TO_IDLE].second);
       } else if (next_state == LEFT) {
-        _animator.hard_switch(_anim[RIGHT_TO_IDLE], 1);
-        _animator.enqueue_sequence(_anim[IDLE_TO_LEFT], 1);
-        _animator.enqueue_sequence(_anim[LEFT], 0);
+        _animator.hard_switch(_anims[RIGHT_TO_IDLE].first, 1, _anims[RIGHT_TO_IDLE].second);
+        _animator.enqueue(_anims[IDLE_TO_LEFT].first, 1, _anims[IDLE_TO_LEFT].second);
+        _animator.enqueue(_anims[LEFT].first, 0, _anims[LEFT].second);
       }
       break;
     }
     case LEFT: {
       if (next_state == IDLE) {
-        _animator.hard_switch(_anim[LEFT_TO_IDLE], 1);
-        _animator.enqueue_sequence(_anim[IDLE], 0);
+        _animator.hard_switch(_anims[LEFT_TO_IDLE].first, 1, _anims[LEFT_TO_IDLE].second);
+        _animator.enqueue(_anims[IDLE].first, 0, _anims[IDLE].second);
       } else if (next_state == RIGHT) {
-        _animator.hard_switch(_anim[LEFT_TO_IDLE], 1);
-        _animator.enqueue_sequence(_anim[IDLE_TO_RIGHT], 1);
-        _animator.enqueue_sequence(_anim[RIGHT], 0);
+        _animator.hard_switch(_anims[LEFT_TO_IDLE].first, 1, _anims[LEFT_TO_IDLE].second);
+        _animator.enqueue(_anims[IDLE_TO_RIGHT].first, 1, _anims[IDLE_TO_RIGHT].second);
+        _animator.enqueue(_anims[RIGHT].first, 0, _anims[RIGHT].second);
       }
       break;
     }
-    default: break;
+    default:
+      break;
   }
-  _state = next_state;
+  _anim_state = next_state;
   _animator.tick();
+  ++_ticks;
 }
 
-void player::animator_type::set_data(res::atlas atlas, animation_data data) {
-  _anim = data;
-  _animator = res::sprite_animator{atlas, _anim[0]};
+mat4 player_entity::transform(const render::sprite_uvs& uvs) const {
+  shogle::transform2d<real> t{};
+  f32 ratio = uvs.x_lin / uvs.y_lin;
+  t.pos(_pos).scale(80.f * ratio, 80.f);
+  mat4 mat = t.world();
+  return mat;
 }
 
-res::sprite player::animator_type::sprite() const {
-  return res::sprite{_animator.atlas(), _animator.frame()};
+entity_sprite player_entity::sprite() const {
+  const auto [idx, uv_modifier] = _animator.frame();
+  const auto& atlas = _animator.atlas();
+  auto render_data = atlas.render_data(idx);
+  render_data.second.x_lin *= uv_modifier.x;
+  render_data.second.y_lin *= uv_modifier.y;
+  return render_data;
 }
 
-void player::tick() {
-  movement.tick(transform);
-  animator.tick(movement);
-}
-
-void projectile::tick() {
-  movement.tick(transform);
-  transform.rot(transform.rot() + angular_speed);
-
-  animator.tick(_lifetime);
-
-  _lifetime++;
-}
-
-void boss::tick() {
-  movement.tick(transform);
-  animator.tick(_lifetime);
-
-  _lifetime++;
-}
-
-} // namespace stage
+} // namespace okuu::stage

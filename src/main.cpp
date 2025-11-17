@@ -1,94 +1,86 @@
-#include "render.hpp"
-#include "global.hpp"
-#include "resources.hpp"
-#include "input.hpp"
-
-#include "ui/frontend.hpp"
-
 #include "stage/stage.hpp"
 
+#include <ntfstl/logger.hpp>
+#include <ntfstl/utility.hpp>
 
-static std::unique_ptr<stage::context> stage_ctx;
+using namespace ntf::numdefs;
 
-namespace global {
-
-static global_state _state;
-
-void start_stage(std::string path) {
-  stage_ctx = std::make_unique<stage::context>(path);
-  _state.current_state = global::states::gameplay;
-}
-
-void go_back() {
-  _state.current_state = global::states::frontend;
-}
-
-global_state& state() { return _state; }
-
-} // namespace global
-
-
-int main([[maybe_unused]] const int argc, [[maybe_unused]] const char* argv[]) {
-  ntf::log::set_level(ntf::log::level::verbose);
-
-  auto glfw = glfw::init();
-  glfw::set_swap_interval(0); // disable vsync
-  
-  glfw::window<renderer> window{1280, 720, "test"};
-  auto imgui = imgui::init(window, imgui::glfw_gl3_impl{});
-
-  // Common init
-  render::init(window);
-  input::init(window); // after global?
-  res::init([&](){
-    render::post_init(window);
-
-    // global init
-    frontend::init();
-    global::_state.current_state = global::states::frontend;
-  });
-
-  ntf::shogle_main_loop(window, UPS,
-    [&](double dt, double alpha) {
-      auto& state = global::state();
-      imgui.start_frame();
-
-      render::clear_viewport();
-      switch (state.current_state) {
-        case global::states::frontend: {
-          render::draw_frontend(dt);
-          break;
-        }
-        case global::states::gameplay: {
-          stage_ctx->render(dt, alpha);
-          break;
-        }
-        default: break;
-      }
-
-      imgui.end_frame();
-    },
-    [&]() {
-      auto& state = global::state();
-      state.elapsed_ticks++;
-      res::do_requests();
-
-      switch(state.current_state) {
-        case global::states::gameplay: {
-          stage_ctx->tick();
-          break;
-        }
-        case global::states::frontend: {
-          frontend::tick();
-          break;
-        }
-        default: break;
-      }
+static okuu::expect<okuu::stage::lua_env> load_stage(chima::context& chima) {
+  chima::spritesheet chara_sheet{chima, "res/packages/test/chara.chima"};
+  for (auto& anim : chara_sheet.anims()) {
+    auto name = chima::to_str_view(anim.name);
+    if (name == "chara_cirno.idle") {
+      anim.fps = 20.f;
+    } else if (name.find("chara_") != std::string::npos) {
+      anim.fps = 30.f;
     }
-  );
+  }
 
-  stage_ctx.reset();
-  res::destroy();
-  render::destroy();
-  ntf::log::debug("[main] byebye!!");
+  std::vector<okuu::assets::sprite_atlas> resources;
+  auto& chara_atlas =
+    resources.emplace_back(okuu::assets::sprite_atlas::from_chima(chara_sheet).value());
+
+  auto cirno_idle = chara_atlas.find_animation("chara_cirno.idle").value();
+  auto cirno_right = chara_atlas.find_animation("chara_cirno.right").value();
+  auto cirno_idle_right = chara_atlas.find_animation("chara_cirno.idle_to_right").value();
+  auto cirno_left = chara_atlas.find_animation("chara_cirno.left").value();
+  auto cirno_idle_left = chara_atlas.find_animation("chara_cirno.idle_to_left").value();
+
+  okuu::assets::sprite_animator chara_animator{chara_atlas, cirno_idle};
+
+  okuu::stage::player_entity::animation_data anims;
+  anims[okuu::stage::player_entity::IDLE] = {cirno_idle,
+                                             okuu::assets::sprite_animator::ANIM_NO_MODIFIER};
+  anims[okuu::stage::player_entity::RIGHT] = {cirno_right,
+                                              okuu::assets::sprite_animator::ANIM_NO_MODIFIER};
+  anims[okuu::stage::player_entity::RIGHT_TO_IDLE] = {
+    cirno_idle_right, okuu::assets::sprite_animator::ANIM_BACKWARDS};
+  anims[okuu::stage::player_entity::IDLE_TO_RIGHT] = {
+    cirno_idle_right,
+    okuu::assets::sprite_animator::ANIM_NO_MODIFIER,
+  };
+  anims[okuu::stage::player_entity::LEFT] = {cirno_left,
+                                             okuu::assets::sprite_animator::ANIM_NO_MODIFIER};
+  anims[okuu::stage::player_entity::LEFT_TO_IDLE] = {
+    cirno_idle_left, okuu::assets::sprite_animator::ANIM_BACKWARDS};
+  anims[okuu::stage::player_entity::IDLE_TO_LEFT] = {
+    cirno_idle_left, okuu::assets::sprite_animator::ANIM_NO_MODIFIER};
+
+  okuu::stage::player_entity player{okuu::vec2{0.f, 0.f}, std::move(anims),
+                                    std::move(chara_animator)};
+
+  static constexpr u32 max_entities = okuu::render::stage_renderer::DEFAULT_STAGE_INSTANCES;
+  auto scene = std::make_unique<okuu::stage::stage_scene>(max_entities, std::move(player),
+                                                          std::move(resources));
+
+  return okuu::stage::lua_env::load("res/packages/test/main.lua", std::move(scene));
+}
+
+static void engine_run() {
+  auto _rh = okuu::render::init();
+
+  chima::context chima;
+  auto stage = load_stage(chima).value();
+
+  float t = 0.f;
+  auto loop = ntf::overload{
+    [&](double dt, double alpha) {
+      t += (float)dt;
+      okuu::render::render_back(t);
+      stage.scene().render(dt, alpha);
+    },
+    [&](u32) { stage.tick(); },
+  };
+  shogle::render_loop(okuu::render::window(), okuu::render::shogle_ctx(), okuu::GAME_UPS, loop);
+}
+
+int main() {
+  ntf::logger::set_level(ntf::log_level::verbose);
+  try {
+    engine_run();
+  } catch (std::exception& ex) {
+    ntf::logger::error("Caught {}", ex.what());
+  } catch (...) {
+    ntf::logger::error("Caught (...)");
+  }
 }

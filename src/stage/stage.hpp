@@ -1,137 +1,85 @@
 #pragma once
 
+#include "../render/stage.hpp"
+#include "../util/free_list.hpp"
+#include "./entity.hpp"
+
+#define SOL_ALL_SAFETIES_ON 1
 #include <sol/sol.hpp>
 
-#include "global.hpp"
-#include "render.hpp"
+namespace okuu::stage {
 
-#include "stage/entity.hpp"
-#include <list>
-
-namespace stage {
-
-class projectile_view {
+class stage_scene {
 public:
-  using iterator = std::list<stage::projectile>::iterator;
+  static constexpr size_t MAX_BOSSES = 4u;
 
 public:
-  projectile_view(std::list<stage::projectile>& list, std::size_t size);
+  template<typename T>
+  using idx_elem = std::pair<u32, T>;
 
 public:
-  void for_each(sol::function f);
-
-public:
-  std::size_t size() const { return _size; }
-
-private:
-  iterator _begin;
-  std::size_t _size;
-};
-
-
-class context {
-private:
-  enum class state {
-    loading = 0,
-    main,
-    end,
-  };
-
-public:
-  context(std::string_view script_path);
+  stage_scene(u32 max_entities, player_entity&& player_,
+              std::vector<assets::sprite_atlas>&& atlas_assets_);
 
 public:
   void tick();
-  void render(double dt, [[maybe_unused]] double alpha);
+  void render(double dt, double alpha);
 
 public:
-  void start();
-
-private:
-  void _lua_post_open(sol::table stlib);
-  void _prepare_player();
-
-private:
-  context::state _state{context::state::loading};
-
-  sol::state _lua;
-
-  sol::coroutine _task;
-  sol::thread _task_thread;
-
-  sol::protected_function _on_tick;
-  sol::protected_function _on_render;
-
-  frames _tick_count{0}, _frame_count{0};
-  frames _task_time{0}, _task_wait{0};
-
-  std::list<stage::projectile> _projs;
-  stage::boss _boss;
-  stage::player _player;
-
-  render::stage_viewport _viewport;
-
-  render::viewport_event::subscription _vp_sub;
+  ntf::optional<idx_elem<assets::sprite_atlas::sprite>> find_sprite(std::string_view name) const;
+  ntf::optional<idx_elem<assets::sprite_atlas::animation>> find_anim(std::string_view name) const;
 
 public:
-  ~context() noexcept;
-  NTF_DISABLE_COPY(context);
+  util::free_list<projectile_entity> projs;
+  std::array<ntf::nullable<boss_entity>, MAX_BOSSES> bosses;
+  u32 boss_count;
+  player_entity player;
+  std::vector<assets::sprite_atlas> atlas_assets;
+  render::stage_renderer renderer;
+  u32 task_wait_ticks, ticks;
 };
 
-
-template<typename T, typename Allocator>
-class entity_pool {
+class lua_env {
 public:
-  using allocator_type = Allocator;
+  class projectile_view {
+  public:
+    projectile_view(util::free_list<projectile_entity>& list, size_t count);
 
-private:
-  struct pool_header {
-    pool_header* next;
+  public:
+    void for_each(sol::function f);
+
+  public:
+    size_t size() const { return _items.size(); }
+
+  private:
+    std::vector<u32> _items;
+    ntf::weak_ptr<util::free_list<projectile_entity>> _list;
   };
 
 public:
-  entity_pool() = default;
+  lua_env(sol::state&& lua, sol::table lib_table, std::unique_ptr<stage_scene>&& scene);
 
 public:
-  T* acquire();
-  void release(T* obj);
+  static expect<lua_env> load(const std::string& script_path,
+                              std::unique_ptr<stage_scene>&& scene);
 
 public:
-  std::size_t used() const { return _used; }
-  std::size_t allocated() const { return _allocated; }
+  void tick();
+
+  stage_scene& scene() { return *_scene; }
+
+  const stage_scene& scene() const { return *_scene; }
 
 private:
-  allocator_type _allocator;
-  pool_header* _free{nullptr};
-  std::size_t _allocated{0}, _used{0};
+  sol::state _lua;
+
+  sol::thread _task_thread;
+  sol::coroutine _task;
+
+  u32 _ticks, _frames;
+  u32 _task_time;
+
+  std::unique_ptr<stage_scene> _scene;
 };
 
-template<typename T, typename Allocator>
-auto entity_pool<T, Allocator>::acquire() -> T* {
-  pool_header* header = _free;
-  T* obj;
-
-  if (_free) {
-    obj = reinterpret_cast<T*>(_free);
-    _free = _free->next;
-  } else {
-    obj = _allocator.allocate(1);
-    ++_allocated;
-  }
-
-  _allocator.construct(obj, T{});
-  ++_used;
-
-  return obj;
-}
-
-template<typename T, typename Allocator>
-void entity_pool<T, Allocator>::release(T* obj) {
-  _allocator.destroy(obj);
-  pool_header* header = reinterpret_cast<pool_header*>(obj);
-  header->next = _free;
-  _free = header;
-  --_used;
-}
-
-} // namespace stage
+} // namespace okuu::stage
