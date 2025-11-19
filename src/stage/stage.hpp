@@ -6,6 +6,8 @@
 
 namespace okuu::stage {
 
+struct projectile_args {};
+
 class stage_scene {
 public:
   static constexpr size_t MAX_BOSSES = 4u;
@@ -21,6 +23,9 @@ public:
 public:
   void tick();
   void render(double dt, double alpha);
+
+public:
+  u64 spawn_projectile(const projectile_args& args);
 
 public:
   ntf::optional<idx_elem<assets::sprite_atlas::sprite>> find_sprite(std::string_view name) const;

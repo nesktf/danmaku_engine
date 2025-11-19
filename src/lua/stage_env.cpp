@@ -1,165 +1,276 @@
-#include "./lua_env.hpp"
+#include "./stage_env.hpp"
+#include "../stage/stage.hpp"
 
-namespace okuu::stage {
+namespace okuu::lua {
 
 namespace {
 
-constexpr std::string_view incl_path = ";res/script/?.lua";
+constexpr u32 secs_to_ticks(f32 secs) noexcept {
+  return static_cast<u32>(std::floor(secs * okuu::GAME_UPS));
+}
 
-using module_pair = std::pair<const char*, void (*)(sol::table&)>;
-constexpr module_pair modules[]{
-  {"log",
-   +[](sol::table& module) {
-   }},
-  {"math",
-   +[](sol::table& module) {
-   }},
+fn add_logger(sol::table& lib) {
+  auto logger = lib["logger"].get_or_create<sol::table>();
+  logger.set_function("error", [](std::string msg) { ntf::logger::error("{}", msg); });
+  logger.set_function("warn", [](std::string msg) { ntf::logger::warning("{}", msg); });
+  logger.set_function("debug", [](std::string msg) { ntf::logger::debug("{}", msg); });
+  logger.set_function("info", [](std::string msg) { ntf::logger::info("{}", msg); });
+  logger.set_function("verbose", [](std::string msg) { ntf::logger::info("{}", msg); });
+  return logger;
+}
+
+fn add_cmplx(sol::table& lib) {
+  return lib.new_usertype<cmplx>(
+    "cmplx", sol::call_constructor,
+    sol::constructors<cmplx(), cmplx(float), cmplx(float, float)>{}, "real",
+    sol::property(
+      +[](cmplx& c, float f) { c.real(f); }, +[](cmplx& c) -> float { return c.real(); }),
+    "imag",
+    sol::property(
+      +[](cmplx& c, float f) { c.imag(f); }, +[](cmplx& c) -> float { return c.imag(); }),
+    "expi", &shogle::expic, "polar", &std::polar<float>,
+
+    sol::meta_function::addition, sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator+),
+    sol::meta_function::subtraction,
+    sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator-),
+    sol::meta_function::multiplication,
+    sol::overload(sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator*),
+                  sol::resolve<cmplx(const cmplx&, const float&)>(&std::operator*),
+                  sol::resolve<cmplx(const float&, const cmplx&)>(&std::operator*)),
+    sol::meta_function::division,
+    sol::overload(sol::resolve<cmplx(const cmplx&, const cmplx&)>(&std::operator/),
+                  sol::resolve<cmplx(const cmplx&, const float&)>(&std::operator/),
+                  sol::resolve<cmplx(const float&, const cmplx&)>(&std::operator/)));
+}
+
+fn add_vec2(sol::table& lib) {
+  // clang-format off
+  return lib.new_usertype<vec2>(
+    "vec2",
+      sol::call_constructor, sol::constructors<vec2(), vec2(float), vec2(float, float)>{},
+    "x",
+      sol::property(+[](vec2& v, float f) { v.x = f; }, +[](vec2& v) -> float { return v.x; }),
+    "y",
+      sol::property(+[](vec2& v, float f) { v.y = f; }, +[](vec2& v) -> float { return v.y; }),
+    sol::meta_function::addition,
+      sol::resolve<vec2(const vec2&, const vec2&)>(&glm::operator+),
+    sol::meta_function::subtraction,
+      sol::resolve<vec2(const vec2&, const vec2&)>(&glm::operator-),
+    sol::meta_function::multiplication,
+      sol::resolve<vec2(const vec2&, const vec2&)>(&glm::operator*),
+    sol::meta_function::division,
+      sol::resolve<vec2(const vec2&, const vec2&)>(&glm::operator/)
+  );
+  // clang-format on
+}
+
+fn add_mat4(sol::table& lib) {
+  // clang-format off
+  return lib.new_usertype<mat4>(
+    "mat4",
+      sol::call_constructor, sol::constructors<mat4()>{},
+    sol::meta_function::multiplication,
+      sol::resolve<mat4(const mat4&, const mat4&)>(&glm::operator*)
+  );
+  // clang-format on
+}
+
+fn setup_base_module(sol::state_view lua) {
+  auto okuu_lib = lua["okuu"].get_or_create<sol::table>();
+  add_logger(okuu_lib);
+
+  auto math_module = okuu_lib["math"].get_or_create<sol::table>();
+  add_cmplx(math_module);
+  add_vec2(math_module);
+  add_mat4(math_module);
+
+  return okuu_lib;
+}
+
+struct stage_data {
+  sol::protected_function stage_setup;
+  sol::protected_function stage_run;
 };
-constexpr std::size_t module_count = sizeof(modules) / sizeof(module_pair);
-constexpr std::string_view stlib_key = "okuu";
 
-sol::table prepare_lua_env(sol::state_view lua, ntf::weak_ptr<stage_scene> scene) {
-  lua.open_libraries(sol::lib::base, sol::lib::coroutine, sol::lib::package, sol::lib::table,
-                     sol::lib::math, sol::lib::string);
+fn setup_package_module(sol::table& okuu_lib, ntf::optional<stage_data>& stage_data) {
+  auto package_module = okuu_lib["package"].get_or_create<sol::table>();
 
-  lua["package"]["path"] = incl_path.data();
-
-  auto lib = lua[stlib_key.data()].get_or_create<sol::table>();
-  for (size_t i = 0; i < module_count; ++i) {
-    const auto& [name, loader] = modules[i];
-    auto module = lib[name].get_or_create<sol::table>();
-    loader(module);
-  }
-
-  static constexpr real DT = 1.f / 60.f;
-  auto lib_stage = lib["stage"].get_or_create<sol::table>();
-  lib_stage.set_function("spawn_boss", [=](float scale, cmplx p0, cmplx p1) {
-    if (scene->boss_count >= stage_scene::MAX_BOSSES) {
-      ntf::logger::warning("Over the boss limit");
+  package_module["start_stage"].set_function([&](sol::this_state, sol::table args) {
+    auto setup = args.get<sol::optional<sol::protected_function>>("setup");
+    auto run = args.get<sol::optional<sol::protected_function>>("run");
+    if (!setup.has_value() || !run.has_value()) {
       return;
     }
-
-    // auto [atlas_idx, sprite] = scene->find_sprite("ball_solid").value();
-    // const auto& atlas = scene->atlas_assets[atlas_idx];
-    // entity_sprite boss_sprite{atlas, sprite};
-    // const vec2 boss_pos{p0.real(), p0.imag()};
-    // const auto mov = entity_movement::move_towards({p1.real(), p1.imag()}, DT *
-    // vec2{10.f, 10.f},
-    //                                                vec2{DT, DT}, .8f);
-    //
-    // const u32 boss_idx = scene->boss_count;
-    // scene->bosses[boss_idx].emplace(0u, boss_pos, boss_sprite, mov);
-    scene->boss_count++;
+    stage_data.emplace(std::move(*setup), std::move(*run));
   });
 
-  lib_stage.set_function("move_boss", [=](sol::table args) {
-    if (scene->boss_count == 0) {
-      return;
-    }
-    if (!args["pos"].is<cmplx>()) {
-      return;
-    }
-    const cmplx pos = args["pos"].get<cmplx>();
+  return package_module;
+}
 
-    const u32 other_idx = scene->boss_count - 1;
-    const u32 boss_idx = args.get_or<u32>("boss_idx", other_idx); // the last boss
-    if (boss_idx >= scene->boss_count) {
-      return;
-    }
-    auto& boss = scene->bosses[boss_idx];
-    NTF_ASSERT(boss.has_value());
-    boss->set_movement(entity_movement::move_towards({pos.real(), pos.imag()},
-                                                     DT * vec2{10.f, 10.f}, vec2{DT, DT}, .8f));
-  });
-
-  lib_stage.set_function("boss_pos", [=](sol::table args) -> cmplx {
-    if (scene->boss_count == 0) {
-      return {};
-    }
-    const u32 other_idx = scene->boss_count - 1;
-    const u32 boss_idx = args.get_or<u32>("boss_idx", other_idx); // the last boss
-    if (boss_idx >= scene->boss_count) {
-      return {};
-    }
-    auto& boss = scene->bosses[boss_idx];
-    NTF_ASSERT(boss.has_value());
-    return {boss->pos().x, boss->pos().y};
-  });
-
-  lib_stage.set_function("player_pos", [=]() -> cmplx {
-    return {scene->player.pos().x, scene->player.pos().y};
-  });
-
-  lib_stage.set_function("cowait",
-                         sol::yielding([=](u32 time) { scene->task_wait_ticks = time; }));
-
-  auto mov_type = lib_stage.new_usertype<entity_movement>(
-    "move", sol::no_constructor, "make_linear", +[](sol::table tbl) {
-      const vec2 vel{tbl.get<real>("real"), tbl.get<real>("imag")};
-      return entity_movement::move_linear(vel);
-    });
-
-  auto proj_type = lib_stage.new_usertype<projectile_entity>(
-    "proj", sol::no_constructor, "movement", sol::property(&projectile_entity::set_movement),
-    "angular_speed",
-    sol::property(&projectile_entity::angular_speed, &projectile_entity::set_angular_speed));
-
-  auto view_type = lib_stage.new_usertype<lua_env::projectile_view>(
-    "pview", sol::no_constructor, "make",
-    [=](size_t size) -> lua_env::projectile_view {
-
-    },
-    "size", sol::property(&lua_env::projectile_view::size), "for_each",
-    &lua_env::projectile_view::for_each);
-
-  return lib;
+fn clean_package_module(sol::table& okuu_lib) {
+  okuu_lib["package"].set(sol::nil);
 }
 
 } // namespace
 
-expect<lua_env> lua_env::load(const std::string& script_path,
-                              std::unique_ptr<stage_scene>&& scene) {
-  // auto vp = okuu::render::stage_viewport::create(600, 700, 640, 360);
+thread_coro::thread_coro(sol::thread&& coro_thread_, sol::coroutine&& coro_) :
+    _coro_thread{std::move(coro_thread_)}, _coro{std::move(coro_)} {}
 
+thread_coro thread_coro::from_func(sol::protected_function func) {
+  auto state = func.lua_state();
+  auto thread = sol::thread::create(state);
+  sol::coroutine coro{thread.state(), func};
+  return {std::move(thread), std::move(coro)};
+}
+
+sol::table setup_stage_module(sol::table& okuu_lib, stage::stage_scene& scene);
+
+stage_env::stage_env(sol::state&& lua, sol::thread&& stage_run_thread,
+                     sol::coroutine&& stage_run) :
+    _lua{std::move(lua)}, _stage_run_thread{std::move(stage_run_thread)},
+    _stage_run{std::move(stage_run)} {}
+
+static constexpr std::string_view incl_path = ";res/script/?.lua";
+
+expect<stage_env> load(const std::string& script_path, stage::stage_scene& scene) {
   sol::state lua;
-  auto lib_table = prepare_lua_env(lua, scene.get());
-  lua.script_file(script_path);
+  lua.open_libraries(sol::lib::base, sol::lib::coroutine, sol::lib::package, sol::lib::table,
+                     sol::lib::math, sol::lib::string);
+  lua["package"]["path"] = incl_path.data();
+  auto okuu_lib = setup_base_module(lua);
+  auto stage_module = setup_stage_module(okuu_lib, scene);
 
-  if (!lib_table["init"].is<sol::function>()) {
-    return {ntf::unexpect, "Init function not defined in stage script"};
-  }
-  if (!lib_table["main"].is<sol::function>()) {
-    return {ntf::unexpect, "Main function not defined in stage script"};
-  }
+  ntf::optional<stage_data> stage_data;
+  auto package_module = setup_package_module(okuu_lib, stage_data);
 
-  return {ntf::in_place, std::move(lua), std::move(lib_table), std::move(scene)};
+  try {
+    lua.safe_script_file(script_path);
+    clean_package_module(okuu_lib); // stage_data will become a dangling pointer otherwise
+    if (!stage_data.has_value()) {
+      return {ntf::unexpect, "No stage functions defined in lua scriptl"};
+    }
+
+    auto setup_res = std::invoke(stage_data->stage_setup);
+    if (!setup_res.valid()) {
+      sol::error err = setup_res;
+      logger::error("Error on script stage_setup \"{}\": {}", script_path, err.what());
+      return {ntf::unexpect, err.what()};
+    }
+
+    auto run_thread = sol::thread::create(lua.lua_state());
+    sol::coroutine run_coro{run_thread.state(), stage_data->stage_run};
+    okuu_lib["__curr_stage"] = lua_stage{scene};
+
+    return {ntf::in_place, std::move(lua), std::move(run_thread), std::move(run_coro)};
+  } catch (const sol::error& err) {
+    return {ntf::unexpect, err.what()};
+  }
 }
 
-lua_env::lua_env(sol::state&& lua, sol::table lib_table, std::unique_ptr<stage_scene>&& scene) :
-    _lua{std::move(lua)}, _task_thread{sol::thread::create(_lua.lua_state())},
-    _task{_task_thread.state(), lib_table["main"].get<sol::function>()}, _scene{std::move(scene)} {
+void stage_env::run_tasks(stage::stage_scene& scene) {
+  auto okuu_lib = _lua["okuu"].get<sol::table>();
+  if (scene.ticks >= scene.task_wait_ticks) {
+    auto stage = okuu_lib["__curr_stage"];
+    scene.task_wait_ticks = 0;
+    std::invoke(_stage_run, stage);
+  }
 }
 
-lua_env::projectile_view::projectile_view(util::free_list<projectile_entity>& list, size_t count) :
-    _list{list} {
-  _items.reserve(count);
+lua_stage::lua_stage(stage::stage_scene& scene) : _scene{scene} {}
+
+void lua_stage::on_yield(u32 ticks) {
+  _scene->task_wait_ticks += ticks;
+}
+
+lua_player lua_stage::get_player() {
+  return {};
+}
+
+void lua_stage::trigger_dialog(std::string dialog_id) {
+  NTF_UNUSED(dialog_id);
+}
+
+sol::variadic_results lua_stage::get_boss(sol::this_state ts, u32 slot) {
+  sol::variadic_results res;
+  if (slot > _scene->boss_count) {
+    res.push_back({ts, sol::nil});
+    return res;
+  }
+  auto& boss = _scene->bosses[slot];
+  if (!boss.has_value()) {
+    res.push_back({ts, sol::nil});
+    return res;
+  }
+
+  res.push_back({ts, sol::in_place_type<lua_boss>, slot});
+  return res;
+}
+
+namespace {
+
+struct lua_projectile_args {
+  stage::projectile_args proj;
+  sol::optional<sol::protected_function> state_handler;
+};
+
+fn actually_spawn_proj(stage::stage_scene& scene) {
+  return [&](lua_projectile_args&& args) -> expect<lua_projectile> {
+    try {
+      ntf::optional<sol::coroutine> state_handler;
+      if (args.state_handler.has_value()) {
+        state_handler.emplace(std::move(*args.state_handler));
+      }
+      auto handle = scene.spawn_projectile(args.proj);
+      return {ntf::in_place, handle, std::move(state_handler)};
+    } catch (const sol::error& err) {
+      logger::error("{}", err.what());
+      return {ntf::unexpect, err.what()};
+    }
+  };
+}
+
+expect<lua_projectile_args> parse_proj_args(sol::table& args) {
+
+  return {};
+}
+
+} // namespace
+
+sol::variadic_results lua_stage::spawn_proj(sol::this_state ts, sol::table args) {
+  sol::variadic_results res;
+
+  auto proj = parse_proj_args(args).and_then(actually_spawn_proj(get_scene()));
+  if (!proj.has_value()) {
+    res.push_back({ts, sol::nil});
+  } else {
+    res.push_back({ts, sol::in_place_type<lua_projectile>, *proj});
+  }
+  return res;
+}
+
+sol::table lua_stage::spawn_proj_n(sol::this_state ts, u32 count, sol::protected_function func) {
+  sol::state_view lua = ts;
+
+  std::vector<sol::table> args;
+  args.reserve(count);
   for (u32 i = 0; i < count; ++i) {
-    // auto elem = list.request_elem(0, vec2{0.f, 0.f}, vec2{1.f, 1.f}, M_PIf, sprite);
-    // _items.emplace_back(elem.idx());
+    auto arg_tbl = func.call<sol::table>();
+    if (!arg_tbl.valid()) {
+      continue;
+    }
+    args.emplace_back(arg_tbl);
   }
-}
 
-void lua_env::projectile_view::for_each(sol::function f) {
-  for (u32 item : _items) {
-    util::free_list<projectile_entity>::element elem{*_list, item};
-    if (elem.alive()) {
-      f(*elem);
+  sol::table out = lua.create_table(count);
+  u32 i = 1;
+  for (auto& arg : args) {
+    auto proj = parse_proj_args(arg).and_then(actually_spawn_proj(get_scene()));
+    if (proj.has_value()) {
+      out[i] = *proj;
+      ++i;
     }
   }
+  return out;
 }
 
-void lua_env::tick() {
-  scene().tick();
-}
-
-} // namespace okuu::stage
+} // namespace okuu::lua
