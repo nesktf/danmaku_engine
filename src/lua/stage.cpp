@@ -1,83 +1,46 @@
-#include "../stage/entity.hpp"
-#include "./stage_env.hpp"
-
-#include "../stage/stage.hpp"
+#include "./stage.hpp"
+#include "./assets.hpp"
 
 namespace okuu::lua {
 
-static lua_stage get_stage(sol::this_state ts) {
-  sol::state_view lua{ts};
-  auto okuu_lib = lua["okuu"].get<sol::table>();
-  return okuu_lib["__curr_stage"].get<lua_stage>();
-}
-
 lua_player::lua_player() {}
-
-static fn prep_player_usertype(sol::table& module) {
-  // clang-format off
-  return module.new_usertype<lua_player>(
-    "player", sol::no_constructor
-  );
-  // clang-format on
-}
 
 lua_boss::lua_boss(u32 slot) noexcept : _boss_slot{slot} {}
 
+u32 lua_boss::get_slot() const {
+  return _boss_slot;
+}
+
 bool lua_boss::is_alive(sol::this_state ts) const {
-  auto stage = get_stage(ts);
-  return stage.get_scene().get_boss(_boss_slot).is_active();
+  auto& stage = lua_stage::instance(ts);
+  return stage.get_boss(_boss_slot).is_active();
 }
 
-void lua_boss::kill(sol::this_state ts) {
-  auto stage = get_stage(ts);
-  stage.get_scene().kill_boss(_boss_slot);
-}
-
-static fn prep_boss_usertype(sol::table& module) {
-  // clang-format off
-  return module.new_usertype<lua_boss>(
-    "boss", sol::no_constructor,
-    "get_slot", &lua_boss::get_slot,
-    "kill", &lua_boss::kill,
-    "is_alive", &lua_boss::is_alive
-  );
-  // clang-format on
+void lua_boss::kill(sol::this_state ts) const {
+  auto& stage = lua_stage::instance(ts);
+  stage.kill_boss(_boss_slot);
 }
 
 lua_projectile::lua_projectile(u64 handle) : _handle{handle} {}
 
+u32 lua_projectile::get_handle() const {
+  return _handle;
+}
+
 bool lua_projectile::is_alive(sol::this_state ts) const {
-  auto stage = get_stage(ts);
-  return stage.get_scene().is_projectile_alive(_handle);
+  auto& stage = lua_stage::instance(ts);
+  return stage.is_projectile_alive(_handle);
 }
 
-void lua_projectile::kill(sol::this_state ts) {
-  auto stage = get_stage(ts);
-  stage.get_scene().kill_projectile(_handle);
-}
-
-static fn prep_proj_usertype(sol::table& module) {
-  // clang-format off
-  return module.new_usertype<lua_projectile>(
-    "projectile", sol::no_constructor,
-    "is_alive", &lua_projectile::is_alive,
-    "kill", &lua_projectile::kill
-  );
-  // clang-format on
-}
-
-static constexpr u32 secs_to_ticks(f32 secs) noexcept {
-  return static_cast<u32>(std::floor(secs * okuu::GAME_UPS));
+void lua_projectile::kill(sol::this_state ts) const {
+  auto& stage = lua_stage::instance(ts);
+  stage.kill_projectile(_handle);
 }
 
 lua_stage::lua_stage(stage::stage_scene& scene) : _scene{scene} {}
 
 void lua_stage::on_yield(u32 ticks) {
   _scene->task_wait(ticks);
-}
-
-lua_player lua_stage::get_player() {
-  return {};
 }
 
 void lua_stage::trigger_dialog(std::string dialog_id) {
@@ -150,7 +113,7 @@ sol::variadic_results lua_stage::spawn_proj(sol::this_state ts, sol::table args)
   sol::variadic_results res;
 
   auto proj = parse_proj_args(args).transform(
-    [&](stage::projectile_args&& args) { return get_scene().spawn_projectile(args); });
+    [&](stage::projectile_args&& args) { return lua_stage::instance(ts).spawn_projectile(args); });
   if (!proj.has_value()) {
     res.push_back({ts, sol::nil});
   } else {
@@ -175,8 +138,9 @@ sol::table lua_stage::spawn_proj_n(sol::this_state ts, u32 count, sol::protected
   sol::table out = lua.create_table(count);
   u32 i = 1;
   for (auto& arg : args) {
-    auto proj = parse_proj_args(arg).transform(
-      [&](stage::projectile_args&& args) { return get_scene().spawn_projectile(args); });
+    auto proj = parse_proj_args(arg).transform([&](stage::projectile_args&& args) {
+      return lua_stage::instance(ts).spawn_projectile(args);
+    });
     if (proj.has_value()) {
       out[i] = *proj;
       ++i;
@@ -185,9 +149,28 @@ sol::table lua_stage::spawn_proj_n(sol::this_state ts, u32 count, sol::protected
   return out;
 }
 
-static fn prep_stage_usertype(sol::table& module) {
+namespace {
+
+fn prep_usertypes(sol::table& module) {
   // clang-format off
-  return module.new_usertype<lua_stage>(
+  module.new_usertype<lua_player>(
+    "player", sol::no_constructor
+  );
+  module.new_usertype<lua_boss>(
+    "boss", sol::no_constructor,
+    "get_slot", &lua_boss::get_slot,
+    "kill", &lua_boss::kill,
+    "is_alive", &lua_boss::is_alive
+  );
+  module.new_usertype<lua_projectile>(
+    "projectile", sol::no_constructor,
+    "is_alive", &lua_projectile::is_alive,
+    "kill", &lua_projectile::kill
+  );
+  module.new_usertype<stage::entity_movement>(
+    "movement", sol::no_constructor
+  );
+  module.new_usertype<lua_stage>(
     "stage", sol::no_constructor,
     "yield", sol::yielding(+[](lua_stage& stage) { stage.on_yield(1); }),
     "yield_ticks", sol::yielding(+[](lua_stage& stage, u32 ticks) { stage.on_yield(ticks); }),
@@ -195,7 +178,7 @@ static fn prep_stage_usertype(sol::table& module) {
       stage.on_yield(secs_to_ticks(secs));
     }),
     "trigger_dialog", &lua_stage::trigger_dialog,
-    "get_player", &lua_stage::get_player,
+    "get_player", +[](lua_stage&) -> lua_player { return {}; },
     "get_boss", &lua_stage::get_boss,
     "spawn_proj", &lua_stage::spawn_proj,
     "spawn_proj_n", &lua_stage::spawn_proj_n
@@ -203,13 +186,18 @@ static fn prep_stage_usertype(sol::table& module) {
   // clang-format on
 }
 
-sol::table setup_stage_module(sol::table& okuu_lib) {
+} // namespace
+
+sol::table lua_stage::setup_module(sol::table& okuu_lib, stage::stage_scene& scene) {
   sol::table stage_module = okuu_lib["stage"].get_or_create<sol::table>();
-  prep_player_usertype(stage_module);
-  prep_boss_usertype(stage_module);
-  prep_proj_usertype(stage_module);
-  prep_stage_usertype(stage_module);
+  okuu_lib["__curr_stage"] = lua_stage{scene};
+  prep_usertypes(stage_module);
   return stage_module;
+}
+
+stage::stage_scene& lua_stage::instance(sol::state_view lua) {
+  lua_stage stage = lua["okuu"]["__curr_stage"].get<lua_stage>();
+  return stage.get();
 }
 
 } // namespace okuu::lua

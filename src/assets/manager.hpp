@@ -46,6 +46,8 @@ private:
   u32 _idx;
 };
 
+using atlas_handle = assets::asset_handle<assets::asset_type::sprite_atlas>;
+
 class asset_bundle {
 public:
   asset_bundle() = default;
@@ -76,7 +78,7 @@ public:
       _atlas_vec.emplace_back(std::forward<Args>(args)...);
       _atlas_map.emplace(std::move(name), idx);
     }
-    return {idx};
+    return asset_handle<type>{idx};
   };
 
   template<asset_type type>

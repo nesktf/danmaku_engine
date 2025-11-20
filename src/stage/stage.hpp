@@ -1,15 +1,11 @@
 #pragma once
 
-#include "../lua/stage_env.hpp"
-
-#include "../assets/manager.hpp"
-#include "../render/stage.hpp"
-#include "../util/free_list.hpp"
 #include "./entity.hpp"
 
-namespace okuu {
+#include "../render/stage.hpp"
+#include "../util/free_list.hpp"
 
-namespace stage {
+namespace okuu::stage {
 
 class stage_scene {
 public:
@@ -20,7 +16,7 @@ public:
 
 public:
   void tick();
-  void render(double dt, double alpha);
+  void render(double dt, double alpha, assets::asset_bundle& assets);
 
 public:
   u64 spawn_projectile(const projectile_args& args);
@@ -47,25 +43,4 @@ private:
   u32 _task_wait_ticks, _ticks;
 };
 
-} // namespace stage
-
-class game_state {
-public:
-  game_state(std::unique_ptr<assets::asset_bundle>&& assets,
-             std::unique_ptr<stage::stage_scene>&& scene, lua::stage_env&& lua_env);
-
-public:
-  static expect<game_state> load_from_package(const std::string& path, chima::context& chima);
-
-public:
-  void tick();
-  void render(f64 dt, f64 alpha);
-
-private:
-  std::unique_ptr<assets::asset_bundle> _assets;
-  std::unique_ptr<stage::stage_scene> _scene;
-  lua::stage_env _lua_env;
-  f32 _t;
-};
-
-} // namespace okuu
+} // namespace okuu::stage

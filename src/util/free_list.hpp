@@ -67,25 +67,26 @@ public:
     if (!_free.empty()) {
       const u32 idx = _free.back();
       _free.pop();
-      auto& elem = _elems[idx];
-      NTF_ASSERT(!elem.obj.has_value());
-      elem.obj.emplace(std::forward<Args>(args)...);
-      ++elem.version;
-      return {*this, _compose_handle(idx, elem.version)};
+      auto& [elem, version] = _elems[idx];
+      NTF_ASSERT(!elem.has_value());
+      elem.emplace(std::forward<Args>(args)...);
+      ++version;
+      return {*this, _compose_handle(idx, version)};
     }
 
     const u32 idx = _elems.size() - 1u;
-    auto& elem = _elems.emplace_back(ntf::nullopt, 0);
+    auto& [elem, version] = _elems.emplace_back(ntf::nullopt, 0);
     elem.emplace(std::forward<Args>(args)...);
-    return {*this, _compose_handle(idx, elem.version)};
+    return {*this, _compose_handle(idx, version)};
   }
 
   free_list& return_elem(u64 handle) {
     const auto [idx, _] = _decompose_handle(handle);
     NTF_ASSERT(idx < _elems.size());
-    auto& elem = _elems[idx];
-    NTF_ASSERT(elem.obj.has_value());
+    auto& [elem, version] = _elems[idx];
+    NTF_ASSERT(elem.has_value());
     elem.reset();
+    ++version;
     _free.push(idx);
     return *this;
   }

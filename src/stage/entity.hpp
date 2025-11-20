@@ -3,7 +3,7 @@
 #define OKUU_SOL_IMPL
 #include "../lua/sol.hpp"
 
-#include "../assets/sprite.hpp"
+#include "../assets/manager.hpp"
 #include <shogle/shogle.hpp>
 
 namespace okuu::stage {
@@ -15,7 +15,7 @@ using shogle::vec2;
 using shogle::vec3;
 using real = f32;
 
-using entity_sprite = std::pair<shogle::texture2d_view, render::sprite_uvs>;
+using entity_sprite = std::pair<assets::atlas_handle, assets::sprite_atlas::sprite>;
 
 class entity_movement {
 private:

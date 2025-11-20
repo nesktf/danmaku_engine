@@ -30,4 +30,8 @@ using color4 = vec4;
 
 static constexpr u32 GAME_UPS = 60;
 
+constexpr u32 secs_to_ticks(f32 secs) noexcept {
+  return static_cast<u32>(std::floor(secs * okuu::GAME_UPS));
+}
+
 } // namespace okuu

@@ -4,18 +4,7 @@
 #include "./sol.hpp"
 
 #include "../assets/manager.hpp"
-
-namespace okuu::stage {
-
-class player_entity;
-class boss_entity;
-class projectile_entity;
-
-class stage_scene;
-
-using entity_sprite = std::pair<shogle::texture2d_view, render::sprite_uvs>;
-
-} // namespace okuu::stage
+#include "../stage/stage.hpp"
 
 namespace okuu::lua {
 
@@ -42,82 +31,9 @@ private:
   sol::coroutine _coro;
 };
 
-class lua_player {
-public:
-  lua_player();
-
-public:
-};
-
-class lua_boss {
-public:
-  lua_boss(u32 slot) noexcept;
-
-public:
-  u32 get_slot() const { return _boss_slot; }
-
-  bool is_alive(sol::this_state ts) const;
-  void kill(sol::this_state ts);
-
-private:
-  u32 _boss_slot;
-};
-
-class lua_projectile {
-public:
-  lua_projectile(u64 handle);
-
-public:
-  bool is_alive(sol::this_state ts) const;
-  void kill(sol::this_state ts);
-
-private:
-  u64 _handle;
-};
-
-class lua_stage {
-public:
-  lua_stage(stage::stage_scene& scene);
-
-public:
-  stage::stage_scene& get_scene() { return *_scene; }
-
-public:
-  void on_yield(u32 ticks);
-
-  void trigger_dialog(std::string dialog_id);
-
-  lua_player get_player();
-
-  sol::variadic_results get_boss(sol::this_state ts, u32 slot);
-
-  sol::variadic_results spawn_proj(sol::this_state ts, sol::table args);
-
-  sol::table spawn_proj_n(sol::this_state ts, u32 count, sol::protected_function func);
-
-private:
-  ntf::weak_ptr<stage::stage_scene> _scene;
-};
-
-class lua_sprite {
-public:
-  stage::entity_sprite get();
-};
-
-class lua_asset_bundle {
-public:
-  lua_asset_bundle(assets::asset_bundle& bundle);
-
-public:
-  assets::asset_bundle& get_bundle() { return *_assets; }
-
-private:
-  ntf::weak_ptr<assets::asset_bundle> _assets;
-};
-
 class stage_env {
 public:
-  stage_env(sol::state&& lua, sol::thread&& stage_run_thread, sol::coroutine&& stage_run);
+  stage_env(sol::state&& lua, sol::coroutine&& stage_run);
 
 public:
   static expect<stage_env> load(const std::string& script_path, stage::stage_scene& scene,
@@ -128,7 +44,6 @@ public:
 
 private:
   sol::state _lua;
-  sol::thread _stage_run_thread;
   sol::coroutine _stage_run;
 };
 
