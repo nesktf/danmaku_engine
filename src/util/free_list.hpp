@@ -45,7 +45,9 @@ public:
 
     bool is_alive() const { return _list._is_valid(_handle); }
 
-    void kill() { _list->return_elem(*this); }
+    void kill() { _list->return_elem(_handle); }
+
+    u64 handle() const { return _handle; }
 
   private:
     ntf::weak_ptr<free_list> _list;
@@ -78,8 +80,8 @@ public:
     return {*this, _compose_handle(idx, elem.version)};
   }
 
-  free_list& return_elem(element ret) {
-    const auto [idx, _] = _decompose_handle(ret._handle);
+  free_list& return_elem(u64 handle) {
+    const auto [idx, _] = _decompose_handle(handle);
     NTF_ASSERT(idx < _elems.size());
     auto& elem = _elems[idx];
     NTF_ASSERT(elem.obj.has_value());
@@ -89,14 +91,34 @@ public:
   }
 
   void clear() {
-    for (auto& elem : _elems) {
-      if (elem.obj.has_value()) {
-        elem.obj.reset();
+    for (auto& [elem, version] : _elems) {
+      if (elem.has_value()) {
+        elem.reset();
+        ++version;
       }
-      ++elem.version;
     }
     while (!_free.empty()) {
       _free.pop();
+    }
+  }
+
+  template<typename F>
+  free_list& clear_where(F&& func) {
+    for (u32 idx = 0; auto& [elem, version] : _elems) {
+      if (!elem.has_value()) {
+        ++idx;
+        continue;
+      }
+      const bool should_reset = std::invoke(func, *elem);
+      if (!should_reset) {
+        ++idx;
+        continue;
+      }
+
+      elem.reset();
+      ++version;
+      _free.push(idx);
+      ++idx;
     }
   }
 

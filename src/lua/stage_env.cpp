@@ -123,22 +123,25 @@ thread_coro thread_coro::from_func(sol::protected_function func) {
   return {std::move(thread), std::move(coro)};
 }
 
-sol::table setup_stage_module(sol::table& okuu_lib, stage::stage_scene& scene);
+sol::table setup_stage_module(sol::table& okuu_lib);
+sol::table setup_assets_module(sol::table& okuu_lib);
 
 stage_env::stage_env(sol::state&& lua, sol::thread&& stage_run_thread,
                      sol::coroutine&& stage_run) :
-    _lua{std::move(lua)}, _stage_run_thread{std::move(stage_run_thread)},
-    _stage_run{std::move(stage_run)} {}
+    _lua{std::move(lua)},
+    _stage_run_thread{std::move(stage_run_thread)}, _stage_run{std::move(stage_run)} {}
 
 static constexpr std::string_view incl_path = ";res/script/?.lua";
 
-expect<stage_env> load(const std::string& script_path, stage::stage_scene& scene) {
+expect<stage_env> load(const std::string& script_path, stage::stage_scene& scene,
+                       assets::asset_bundle& assets) {
   sol::state lua;
   lua.open_libraries(sol::lib::base, sol::lib::coroutine, sol::lib::package, sol::lib::table,
                      sol::lib::math, sol::lib::string);
   lua["package"]["path"] = incl_path.data();
   auto okuu_lib = setup_base_module(lua);
-  auto stage_module = setup_stage_module(okuu_lib, scene);
+  auto stage_module = setup_stage_module(okuu_lib);
+  auto asset_module = setup_assets_module(okuu_lib);
 
   ntf::optional<stage_data> stage_data;
   auto package_module = setup_package_module(okuu_lib, stage_data);
@@ -160,6 +163,7 @@ expect<stage_env> load(const std::string& script_path, stage::stage_scene& scene
     auto run_thread = sol::thread::create(lua.lua_state());
     sol::coroutine run_coro{run_thread.state(), stage_data->stage_run};
     okuu_lib["__curr_stage"] = lua_stage{scene};
+    okuu_lib["__curr_asset"] = lua_asset_bundle{assets};
 
     return {ntf::in_place, std::move(lua), std::move(run_thread), std::move(run_coro)};
   } catch (const sol::error& err) {
@@ -167,110 +171,10 @@ expect<stage_env> load(const std::string& script_path, stage::stage_scene& scene
   }
 }
 
-void stage_env::run_tasks(stage::stage_scene& scene) {
+void stage_env::run_tasks() {
   auto okuu_lib = _lua["okuu"].get<sol::table>();
-  if (scene.ticks >= scene.task_wait_ticks) {
-    auto stage = okuu_lib["__curr_stage"];
-    scene.task_wait_ticks = 0;
-    std::invoke(_stage_run, stage);
-  }
-}
-
-lua_stage::lua_stage(stage::stage_scene& scene) : _scene{scene} {}
-
-void lua_stage::on_yield(u32 ticks) {
-  _scene->task_wait_ticks += ticks;
-}
-
-lua_player lua_stage::get_player() {
-  return {};
-}
-
-void lua_stage::trigger_dialog(std::string dialog_id) {
-  NTF_UNUSED(dialog_id);
-}
-
-sol::variadic_results lua_stage::get_boss(sol::this_state ts, u32 slot) {
-  sol::variadic_results res;
-  if (slot > _scene->boss_count) {
-    res.push_back({ts, sol::nil});
-    return res;
-  }
-  auto& boss = _scene->bosses[slot];
-  if (!boss.has_value()) {
-    res.push_back({ts, sol::nil});
-    return res;
-  }
-
-  res.push_back({ts, sol::in_place_type<lua_boss>, slot});
-  return res;
-}
-
-namespace {
-
-struct lua_projectile_args {
-  stage::projectile_args proj;
-  sol::optional<sol::protected_function> state_handler;
-};
-
-fn actually_spawn_proj(stage::stage_scene& scene) {
-  return [&](lua_projectile_args&& args) -> expect<lua_projectile> {
-    try {
-      ntf::optional<sol::coroutine> state_handler;
-      if (args.state_handler.has_value()) {
-        state_handler.emplace(std::move(*args.state_handler));
-      }
-      auto handle = scene.spawn_projectile(args.proj);
-      return {ntf::in_place, handle, std::move(state_handler)};
-    } catch (const sol::error& err) {
-      logger::error("{}", err.what());
-      return {ntf::unexpect, err.what()};
-    }
-  };
-}
-
-expect<lua_projectile_args> parse_proj_args(sol::table& args) {
-
-  return {};
-}
-
-} // namespace
-
-sol::variadic_results lua_stage::spawn_proj(sol::this_state ts, sol::table args) {
-  sol::variadic_results res;
-
-  auto proj = parse_proj_args(args).and_then(actually_spawn_proj(get_scene()));
-  if (!proj.has_value()) {
-    res.push_back({ts, sol::nil});
-  } else {
-    res.push_back({ts, sol::in_place_type<lua_projectile>, *proj});
-  }
-  return res;
-}
-
-sol::table lua_stage::spawn_proj_n(sol::this_state ts, u32 count, sol::protected_function func) {
-  sol::state_view lua = ts;
-
-  std::vector<sol::table> args;
-  args.reserve(count);
-  for (u32 i = 0; i < count; ++i) {
-    auto arg_tbl = func.call<sol::table>();
-    if (!arg_tbl.valid()) {
-      continue;
-    }
-    args.emplace_back(arg_tbl);
-  }
-
-  sol::table out = lua.create_table(count);
-  u32 i = 1;
-  for (auto& arg : args) {
-    auto proj = parse_proj_args(arg).and_then(actually_spawn_proj(get_scene()));
-    if (proj.has_value()) {
-      out[i] = *proj;
-      ++i;
-    }
-  }
-  return out;
+  auto stage = okuu_lib["__curr_stage"];
+  std::invoke(_stage_run, stage);
 }
 
 } // namespace okuu::lua

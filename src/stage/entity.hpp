@@ -1,5 +1,8 @@
 #pragma once
 
+#define OKUU_SOL_IMPL
+#include "../lua/sol.hpp"
+
 #include "../assets/sprite.hpp"
 #include <shogle/shogle.hpp>
 
@@ -57,23 +60,39 @@ private:
   real _attr_exp;
 };
 
+struct projectile_args {
+  vec2 pos;
+  vec2 vel;
+  real angular_speed;
+  entity_sprite sprite;
+  entity_movement movement;
+  ntf::optional<sol::coroutine> state_handler;
+};
+
 class projectile_entity {
 public:
-  projectile_entity(u32 birth, vec2 pos, vec2 scale, real angular_speed, entity_sprite sprite,
-                    entity_movement movement = {});
+  projectile_entity(const projectile_args& args);
 
 public:
   void tick();
 
-  mat4 transform() const;
+  mat4 transform(const render::sprite_uvs& uvs) const;
 
   entity_sprite sprite() const;
 
-  void set_movement(entity_movement movement) { _movement = movement; }
+  projectile_entity& movement(entity_movement movement) {
+    _movement = movement;
+    return *this;
+  }
 
-  void set_angular_speed(real speed) { _angular_speed = speed; }
+  projectile_entity& angular_speed(real speed) {
+    _angular_speed = speed;
+    return *this;
+  }
 
   real angular_speed() const { return _angular_speed; }
+
+  vec2 pos() const { return _pos; }
 
 private:
   u32 _birth;
@@ -85,13 +104,34 @@ private:
   u32 _flags;
   entity_movement _movement;
   entity_sprite _sprite;
+  ntf::optional<sol::coroutine> _state_handler;
+};
+
+struct boss_args {
+  vec2 pos;
+  entity_sprite sprite;
+  entity_movement movement;
 };
 
 class boss_entity {
 public:
-  boss_entity(u32 birth, vec2 pos, entity_sprite sprite, entity_movement movement = {});
+  enum boss_flags {
+    FLAG_NONE = 0,
+    FLAG_ACTIVE = 1 << 0,
+  };
 
 public:
+  boss_entity();
+
+public:
+  boss_entity& setup(const boss_args& args);
+  boss_entity& disable();
+
+  bool is_active() const { return _flags & FLAG_ACTIVE; }
+
+public:
+  u32& flags() { return _flags; }
+
   vec2 pos() const { return _pos; }
 
   boss_entity& pos(real x, real y) {
@@ -102,7 +142,7 @@ public:
 
   void tick();
 
-  mat4 transform() const;
+  mat4 transform(const render::sprite_uvs& uvs) const;
 
   entity_sprite sprite() const;
 
@@ -117,7 +157,7 @@ private:
   vec2 _pos;
   entity_movement _movement;
   u32 _flags;
-  entity_sprite _sprite;
+  ntf::optional<entity_sprite> _sprite;
 };
 
 class player_entity {

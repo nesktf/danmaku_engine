@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../assets/sprite.hpp"
+#include "../assets/manager.hpp"
 #include "./sol.hpp"
 
 namespace okuu::lua {
