@@ -106,8 +106,8 @@ stage_env::stage_env(sol::state&& lua, sol::coroutine&& stage_run) :
 
 static constexpr std::string_view incl_path = ";res/script/?.lua";
 
-expect<stage_env> load(const std::string& script_path, stage::stage_scene& scene,
-                       assets::asset_bundle& assets) {
+expect<stage_env> stage_env::load(const std::string& script_path, stage::stage_scene& scene,
+                                  assets::asset_bundle& assets) {
   sol::state lua;
   lua.open_libraries(sol::lib::base, sol::lib::coroutine, sol::lib::package, sol::lib::table,
                      sol::lib::math, sol::lib::string);

@@ -5,14 +5,14 @@
 
 namespace okuu::lua {
 
-lua_sprite::lua_sprite(atlas_handle handle, assets::sprite_atlas::sprite sprite) :
+lua_sprite::lua_sprite(assets::atlas_handle handle, assets::sprite_atlas::sprite sprite) :
     _handle{handle}, _sprite{sprite} {}
 
-fn lua_sprite::get() const -> std::pair<atlas_handle, assets::sprite_atlas::sprite> {
+fn lua_sprite::get() const -> std::pair<assets::atlas_handle, assets::sprite_atlas::sprite> {
   return {_handle, _sprite};
 }
 
-lua_sprite_atlas::lua_sprite_atlas(atlas_handle atlas) : _atlas{atlas} {}
+lua_sprite_atlas::lua_sprite_atlas(assets::atlas_handle atlas) : _atlas{atlas} {}
 
 sol::variadic_results lua_sprite_atlas::get_sprite(sol::this_state ts, std::string name) const {
   auto& bundle = lua_assets::instance(ts);
@@ -67,7 +67,7 @@ fn prep_asset_funcs(sol::table& module) {
 lua_assets::lua_assets(assets::asset_bundle& assets) : _assets{assets} {}
 
 sol::table lua_assets::setup_module(sol::table& okuu_lib, assets::asset_bundle& assets) {
-  sol::table asset_module = okuu_lib["stage"].get_or_create<sol::table>();
+  sol::table asset_module = okuu_lib["assets"].get_or_create<sol::table>();
   okuu_lib["__curr_assets"] = lua_assets{assets};
   prep_usertypes(asset_module);
   prep_asset_funcs(asset_module);

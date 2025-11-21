@@ -32,10 +32,12 @@ void stage_scene::render(double dt, double alpha, assets::asset_bundle& assets) 
   NTF_UNUSED(alpha);
 
   const auto render_sprite = [&]<renderable_entity Ent>(Ent& entity) {
-    const auto [atlas_handle, sprite] = entity.sprite();
+    const auto [atlas_handle, sprite, uv_modifier] = entity.sprite();
     assets::sprite_atlas& atlas = assets.get_asset(atlas_handle);
 
-    const auto [tex, uvs] = atlas.render_data(sprite);
+    auto [tex, uvs] = atlas.render_data(sprite);
+    uvs.x_lin *= uv_modifier.x;
+    uvs.y_lin *= uv_modifier.y;
     this->_renderer.enqueue_sprite({
       .transform = entity.transform(uvs),
       .texture = tex,
@@ -45,6 +47,10 @@ void stage_scene::render(double dt, double alpha, assets::asset_bundle& assets) 
     });
   };
 
+  _projs.for_each([&](projectile_entity& proj) { render_sprite(proj); });
+
+  render_sprite(_player);
+
   for (u32 i = 0; i < _boss_count; ++i) {
     auto& boss = _bosses[i];
     if (!boss.is_active()) {
@@ -52,10 +58,6 @@ void stage_scene::render(double dt, double alpha, assets::asset_bundle& assets) 
     }
     render_sprite(boss);
   }
-
-  render_sprite(_player);
-
-  _projs.for_each([&](projectile_entity& proj) { render_sprite(proj); });
 
   auto render_target = shogle::framebuffer::get_default(render::g_renderer->ctx);
   render::render_stage(_renderer);
@@ -72,18 +74,41 @@ void stage_scene::tick() {
   }
 
   _projs.for_each([&](projectile_entity& proj) { proj.tick(); });
+  _projs.clear_where([&](projectile_entity& proj) {
+    auto pos = proj.pos();
+    return pos.x > 300 || pos.x < -300 || pos.y > 350 || pos.y < -350;
+  });
 
   _player.tick();
   ++_ticks;
 }
 
-u64 stage_scene::spawn_projectile(const projectile_args& args) {
-  auto elem = _projs.request_elem(args);
+u64 stage_scene::spawn_projectile(projectile_args&& args) {
+  auto elem = _projs.request_elem(std::move(args));
   return elem.handle();
 }
 
 void stage_scene::kill_projectile(u64 handle) {
   _projs.return_elem(handle);
+}
+
+bool stage_scene::is_projectile_alive(u64 handle) {
+  return _projs.is_valid(handle);
+}
+
+void stage_scene::set_proj_pos(u64 handle, f32 x, f32 y) {
+  decltype(_projs)::element elem{_projs, handle};
+  elem->pos(x, y);
+}
+
+vec2 stage_scene::get_proj_pos(u64 handle) {
+  decltype(_projs)::element elem{_projs, handle};
+  return elem->pos();
+}
+
+void stage_scene::set_proj_mov(u64 handle, stage::entity_movement movement) {
+  decltype(_projs)::element elem{_projs, handle};
+  elem->movement(movement);
 }
 
 ntf::optional<u32> stage_scene::spawn_boss(const boss_args& args) {

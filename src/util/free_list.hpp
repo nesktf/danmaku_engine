@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ntfstl/logger.hpp>
 #include <ntfstl/optional.hpp>
 #include <ntfstl/ptr.hpp>
 #include <ntfstl/span.hpp>
@@ -26,13 +27,13 @@ public:
 
   public:
     T& operator*() {
-      NTF_ASSERT(_list._is_valid(_handle));
-      return _list._elem_at(_handle);
+      NTF_ASSERT(is_alive());
+      return _list->elem_at(_handle);
     }
 
     const T& operator*() const {
-      NTF_ASSERT(_list._is_valid(_handle));
-      return _list._elem_at(_handle);
+      NTF_ASSERT(is_alive());
+      return _list->elem_at(_handle);
     }
 
     T* operator->() { return &**this; }
@@ -43,7 +44,7 @@ public:
 
     const T& get() const { return **this; }
 
-    bool is_alive() const { return _list._is_valid(_handle); }
+    bool is_alive() const { return _list->is_valid(_handle); }
 
     void kill() { _list->return_elem(_handle); }
 
@@ -65,19 +66,23 @@ public:
   template<typename... Args>
   element request_elem(Args&&... args) {
     if (!_free.empty()) {
-      const u32 idx = _free.back();
+      const u32 idx = _free.front();
       _free.pop();
       auto& [elem, version] = _elems[idx];
       NTF_ASSERT(!elem.has_value());
       elem.emplace(std::forward<Args>(args)...);
       ++version;
-      return {*this, _compose_handle(idx, version)};
+      auto handle = _compose_handle(idx, version);
+      NTF_ASSERT(is_valid(handle));
+      return {*this, handle};
     }
 
-    const u32 idx = _elems.size() - 1u;
+    const u32 idx = _elems.size();
     auto& [elem, version] = _elems.emplace_back(ntf::nullopt, 0);
     elem.emplace(std::forward<Args>(args)...);
-    return {*this, _compose_handle(idx, version)};
+    auto handle = _compose_handle(idx, version);
+    NTF_ASSERT(is_valid(handle));
+    return {*this, handle};
   }
 
   free_list& return_elem(u64 handle) {
@@ -116,11 +121,14 @@ public:
         continue;
       }
 
+      NTF_ASSERT(elem.has_value());
       elem.reset();
+      NTF_ASSERT(!elem.has_value());
       ++version;
       _free.push(idx);
       ++idx;
     }
+    return *this;
   }
 
   template<typename F>
@@ -143,21 +151,42 @@ public:
     return *this;
   }
 
-private:
-  bool _is_valid(u64 handle) const {
+  bool is_valid(u64 handle) const {
     const auto [idx, ver] = _decompose_handle(handle);
-    if (idx > _elems.size()) {
+    if (idx >= _elems.size()) {
       return false;
     }
-    const auto& elem = _elems[idx];
-    if (!elem.has_value() || elem.version != ver) {
+    const auto& [elem, version] = _elems[idx];
+    if (!elem.has_value()) {
+      return false;
+    }
+    if (ver != version) {
       return false;
     }
 
     return true;
   }
 
-  static u64 _compose_handle(u32 idx, u32 ver) { return (ver << 32) | idx; }
+  T& elem_at(u64 handle) {
+    NTF_ASSERT(is_valid(handle));
+    const auto [idx, _] = _decompose_handle(handle);
+    NTF_ASSERT(idx < _elems.size());
+    auto& [elem, __] = _elems[idx];
+    NTF_ASSERT(elem.has_value());
+    return *elem;
+  }
+
+  const T& elem_at(u64 handle) const {
+    NTF_ASSERT(is_valid(handle));
+    const auto [idx, _] = _decompose_handle(handle);
+    NTF_ASSERT(idx < _elems.size());
+    auto& [elem, __] = _elems[idx];
+    NTF_ASSERT(elem.has_value());
+    return *elem;
+  }
+
+private:
+  static u64 _compose_handle(u32 idx, u32 ver) { return (static_cast<u64>(ver) << 32) | idx; }
 
   static std::pair<u32, u32> _decompose_handle(u64 handle) {
     return {handle & 0xFFFFFFFF, handle >> 32};

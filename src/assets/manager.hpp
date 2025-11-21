@@ -57,7 +57,7 @@ public:
   fn find_asset(const std::string& name) -> ntf::optional<asset_handle<asset_enum_mapper_v<T>>> {
     static constexpr auto type = asset_enum_mapper_v<T>;
     const auto make_handle = [](u32 handle) -> asset_handle<type> {
-      return {handle};
+      return asset_handle<type>{handle};
     };
 
     if constexpr (type == asset_type::sprite_atlas) {

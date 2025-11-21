@@ -52,8 +52,14 @@ expect<game_state> game_state::load_from_package(const std::string& path, chima:
   }
 
   auto& stage = cfg->stages[0];
-  auto& player = cfg->players[0];
-  const auto make_player = [&](const assets::sprite_atlas& atlas) -> stage::player_entity {
+  auto player_it = std::find_if(cfg->players.begin(), cfg->players.end(),
+                                [](const auto& player) { return player.name == "cirno"; });
+  if (player_it == cfg->players.end()) {
+    return {ntf::unexpect, "No baka defined"};
+  }
+  auto& player = *player_it;
+  const auto make_player = [&](assets::atlas_handle atlas_handle,
+                               const assets::sprite_atlas& atlas) -> stage::player_entity {
     stage::player_entity::animation_data player_anims;
     NTF_ASSERT(player_anims.size() == player.anim.size());
     for (u32 i = 0; const auto& [name, modifier] : player.anim) {
@@ -64,7 +70,7 @@ expect<game_state> game_state::load_from_package(const std::string& path, chima:
 
     assets::sprite_animator player_animator{atlas, player_anims[0].first};
     const vec2 initial_pos{0.f, 0.f};
-    return {initial_pos, std::move(player_anims), std::move(player_animator)};
+    return {atlas_handle, initial_pos, std::move(player_anims), std::move(player_animator)};
   };
 
   auto assets = std::make_unique<assets::asset_bundle>();
@@ -89,8 +95,8 @@ expect<game_state> game_state::load_from_package(const std::string& path, chima:
     const auto atlas_handle = assets->find_asset<assets::sprite_atlas>(player.sheet).value();
     const auto& player_atlas = assets->get_asset(atlas_handle);
 
-    auto scene =
-      std::make_unique<stage::stage_scene>(make_player(player_atlas), std::move(*renderer));
+    auto scene = std::make_unique<stage::stage_scene>(make_player(atlas_handle, player_atlas),
+                                                      std::move(*renderer));
     auto lua_env = lua::stage_env::load(stage.script.c_str(), *scene, *assets).value();
 
     return {ntf::in_place, std::move(assets), std::move(scene), std::move(lua_env)};

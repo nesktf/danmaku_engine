@@ -3,7 +3,7 @@ local okuu = okuu
 okuu.package.register_assets {
   ["chara"] = {
     path = "chara.chima",
-    type = okuu.assets.type.spritesheet,
+    type = okuu.assets.type.sprite_atlas,
   },
 }
 
@@ -21,11 +21,11 @@ okuu.package.register_players {
     anim = {
       {"chara_cirno.idle", false},
       {"chara_cirno.left", false},
+      {"chara_cirno.idle_to_left", true},
+      {"chara_cirno.idle_to_left", false},
       {"chara_cirno.right", false},
-      {"chara_cirno.idle_left", false},
-      {"chara_cirno.idle_left", true},
-      {"chara_cirno.idle_right", false},
-      {"chara_cirno.idle_right", true},
+      {"chara_cirno.idle_to_right", true},
+      {"chara_cirno.idle_to_right", false},
     },
     stats = {
       vel = 1.0,
@@ -48,11 +48,11 @@ okuu.package.register_players {
     anim = {
       {"chara_marisa.idle", false},
       {"chara_marisa.left", false},
+      {"chara_marisa.idle_to_left", true},
+      {"chara_marisa.idle_to_left", false},
       {"chara_marisa.right", false},
-      {"chara_marisa.idle_left", false},
-      {"chara_marisa.idle_left", true},
-      {"chara_marisa.idle_right", false},
-      {"chara_marisa.idle_right", true},
+      {"chara_marisa.idle_to_right", true},
+      {"chara_marisa.idle_to_right", false},
     },
     stats = {
       vel = 1.0,
@@ -75,11 +75,11 @@ okuu.package.register_players {
     anim = {
       {"chara_reimu.idle", false},
       {"chara_reimu.left", false},
+      {"chara_reimu.idle_to_left", true},
+      {"chara_reimu.idle_to_left", false},
       {"chara_reimu.right", false},
-      {"chara_reimu.idle_left", false},
-      {"chara_reimu.idle_left", true},
-      {"chara_reimu.idle_right", false},
-      {"chara_reimu.idle_right", true},
+      {"chara_reimu.idle_to_right", true},
+      {"chara_reimu.idle_to_right", false},
     },
     stats = {
       vel = 1.0,

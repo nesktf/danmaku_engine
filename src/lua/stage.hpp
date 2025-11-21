@@ -34,6 +34,9 @@ public:
   u32 get_handle() const;
   bool is_alive(sol::this_state ts) const;
   void kill(sol::this_state ts) const;
+  void set_pos(sol::this_state ts, f32 x, f32 y);
+  vec2 get_pos(sol::this_state ts);
+  void set_movement(sol::this_state ts, stage::entity_movement movement);
 
 private:
   u64 _handle;

@@ -15,7 +15,7 @@ using shogle::vec2;
 using shogle::vec3;
 using real = f32;
 
-using entity_sprite = std::pair<assets::atlas_handle, assets::sprite_atlas::sprite>;
+using entity_sprite = std::tuple<assets::atlas_handle, assets::sprite_atlas::sprite, vec2>;
 
 class entity_movement {
 private:
@@ -63,6 +63,7 @@ private:
 struct projectile_args {
   vec2 pos;
   vec2 vel;
+  vec2 scale;
   real angular_speed;
   entity_sprite sprite;
   entity_movement movement;
@@ -71,14 +72,14 @@ struct projectile_args {
 
 class projectile_entity {
 public:
-  projectile_entity(const projectile_args& args);
+  projectile_entity(projectile_args args);
 
 public:
   void tick();
 
   mat4 transform(const render::sprite_uvs& uvs) const;
 
-  entity_sprite sprite() const;
+  entity_sprite sprite() const { return _sprite; }
 
   projectile_entity& movement(entity_movement movement) {
     _movement = movement;
@@ -93,6 +94,12 @@ public:
   real angular_speed() const { return _angular_speed; }
 
   vec2 pos() const { return _pos; }
+
+  projectile_entity& pos(f32 x, f32 y) {
+    _pos.x = x;
+    _pos.y = y;
+    return *this;
+  }
 
 private:
   u32 _birth;
@@ -177,7 +184,8 @@ public:
   using animation_data = std::array<anim_pair, ANIM_COUNT>;
 
 public:
-  player_entity(vec2 pos, animation_data&& anims, assets::sprite_animator&& animator);
+  player_entity(assets::atlas_handle atlas, vec2 pos, animation_data&& anims,
+                assets::sprite_animator&& animator);
 
 public:
   void tick();
@@ -200,6 +208,7 @@ private:
   vec2 _vel;
   u32 _flags;
   assets::sprite_animator _animator;
+  assets::atlas_handle _atlas;
   animation_state _anim_state;
   animation_data _anims;
 };

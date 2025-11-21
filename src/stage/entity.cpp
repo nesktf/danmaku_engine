@@ -1,5 +1,4 @@
 #include "./entity.hpp"
-#include "../render/instance.hpp"
 
 namespace okuu::stage {
 
@@ -11,9 +10,8 @@ entity_movement::entity_movement(vec2 vel, vec2 acc, real ret) noexcept :
 
 entity_movement::entity_movement(vec2 vel, vec2 acc, real ret, vec2 attr, vec2 attr_p,
                                  real attr_exp) noexcept :
-    _vel{vel.x, vel.y},
-    _acc{acc.x, acc.y}, _ret{ret}, _attr{attr.x, attr.y}, _attr_p{attr_p.x, attr_p.y},
-    _attr_exp{attr_exp} {}
+    _vel{vel.x, vel.y}, _acc{acc.x, acc.y}, _ret{ret}, _attr{attr.x, attr.y},
+    _attr_p{attr_p.x, attr_p.y}, _attr_exp{attr_exp} {}
 
 void entity_movement::next_pos(vec2& curr_pos) {
   cmplx pos{curr_pos.x, curr_pos.y};
@@ -55,48 +53,60 @@ entity_movement entity_movement::move_towards(vec2 target, vec2 vel, vec2 attr, 
   return {vel, vec2{0.f}, ret, attr, target, 1.f};
 }
 
-projectile_entity::projectile_entity(u32 birth, vec2 pos, vec2 scale, real angular_speed,
-                                     entity_sprite sprite, entity_movement movement) :
-    _birth{birth},
-    _ticks{0}, _pos{pos}, _scale{scale}, _rot{0.f}, _angular_speed{angular_speed}, _flags{0},
-    _movement{movement}, _sprite{sprite} {}
+projectile_entity::projectile_entity(projectile_args args) :
+    _birth{0}, _ticks{0}, _pos{args.pos}, _scale{args.scale}, _rot{0.f},
+    _angular_speed{args.angular_speed}, _flags{0}, _movement{args.movement}, _sprite{args.sprite},
+    _state_handler{std::move(args.state_handler)} {}
 
 void projectile_entity::tick() {
   _movement.next_pos(_pos);
-  _rot += _angular_speed;
+  _rot += _angular_speed / (real)GAME_UPS;
   ++_ticks;
 }
 
-mat4 projectile_entity::transform() const {
+mat4 projectile_entity::transform(const render::sprite_uvs& uvs) const {
   shogle::basic_transform<real, shogle::trs_transform<real, 2>, 2, true> t{};
-  t.pos(_pos).scale(_scale).rot(vec3{0.f, 0.f, _rot});
+  f32 ratio = uvs.x_lin / uvs.y_lin;
+  t.pos(_pos).scale(_scale.x * ratio, _scale.y).rot(vec3{0.f, 0.f, _rot});
   mat4 mat = t.world();
   return mat;
 }
 
-boss_entity::boss_entity(u32 birth, vec2 pos, entity_sprite sprite, entity_movement movement) :
-    _birth{birth}, _ticks{0}, _pos{pos}, _movement{movement}, _flags{0}, _sprite{sprite} {}
+boss_entity::boss_entity() : _birth{0}, _ticks{0}, _pos{}, _movement{}, _flags{0}, _sprite{} {}
+
+boss_entity& boss_entity::setup(const boss_args& args) {
+  _movement = args.movement;
+  _pos = args.pos;
+  _sprite.emplace(args.sprite);
+  return *this;
+}
+
+boss_entity& boss_entity::disable() {
+  _flags = 0;
+  _sprite.reset();
+  return *this;
+}
 
 void boss_entity::tick() {
   _movement.next_pos(_pos);
   ++_ticks;
 }
 
-mat4 boss_entity::transform() const {
+mat4 boss_entity::transform(const render::sprite_uvs& uvs) const {
   shogle::transform2d<real> t{};
-  t.pos(_pos).scale(50.f);
+  f32 ratio = uvs.x_lin / uvs.y_lin;
+  t.pos(_pos).scale(50.f * ratio, 50.f);
   mat4 mat = t.world();
   return mat;
 }
 
 entity_sprite boss_entity::sprite() const {
-  return _sprite;
+  return *_sprite;
 }
 
-player_entity::player_entity(vec2 pos, animation_data&& anims,
+player_entity::player_entity(assets::atlas_handle atlas, vec2 pos, animation_data&& anims,
                              assets::sprite_animator&& animator) :
-    _ticks{0},
-    _pos{pos}, _vel{}, _flags{0}, _animator{std::move(animator)},
+    _ticks{0}, _pos{pos}, _vel{}, _flags{0}, _animator{std::move(animator)}, _atlas{atlas},
     _anim_state{animation_state::IDLE}, _anims{std::move(anims)} {}
 
 void player_entity::tick() {
@@ -195,11 +205,12 @@ mat4 player_entity::transform(const render::sprite_uvs& uvs) const {
 
 entity_sprite player_entity::sprite() const {
   const auto [idx, uv_modifier] = _animator.frame();
-  const auto& atlas = _animator.atlas();
-  auto render_data = atlas.render_data(idx);
-  render_data.second.x_lin *= uv_modifier.x;
-  render_data.second.y_lin *= uv_modifier.y;
-  return render_data;
+  return {_atlas, idx, uv_modifier};
+  // const auto& atlas = _animator.atlas();
+  // auto render_data = atlas.render_data(idx);
+  // render_data.second.x_lin *= uv_modifier.x;
+  // render_data.second.y_lin *= uv_modifier.y;
+  // return render_data;
 }
 
 } // namespace okuu::stage

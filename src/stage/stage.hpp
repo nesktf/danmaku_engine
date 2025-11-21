@@ -19,9 +19,12 @@ public:
   void render(double dt, double alpha, assets::asset_bundle& assets);
 
 public:
-  u64 spawn_projectile(const projectile_args& args);
+  u64 spawn_projectile(projectile_args&& args);
   void kill_projectile(u64 handle);
   bool is_projectile_alive(u64 handle);
+  void set_proj_pos(u64 handle, f32 x, f32 y);
+  vec2 get_proj_pos(u64 handle);
+  void set_proj_mov(u64 handle, stage::entity_movement movement);
 
   ntf::optional<u32> spawn_boss(const boss_args& args);
   void kill_boss(u32 slot);

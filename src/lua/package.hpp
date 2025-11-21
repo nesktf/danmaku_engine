@@ -17,11 +17,11 @@ public:
   enum player_anim_entry {
     PLAYER_IDLE = 0,
     PLAYER_LEFT,
-    PLAYER_RIGHT,
-    PLAYER_IDLE_LEFT,
     PLAYER_LEFT_IDLE,
-    PLAYER_IDLE_RIGHT,
+    PLAYER_IDLE_LEFT,
+    PLAYER_RIGHT,
     PLAYER_RIGHT_IDLE,
+    PLAYER_IDLE_RIGHT,
 
     PLAYER_ANIM_COUNT,
   };
