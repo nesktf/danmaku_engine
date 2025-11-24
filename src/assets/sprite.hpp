@@ -2,7 +2,7 @@
 
 #include "../core.hpp"
 #include "../render/stage.hpp"
-#include "./chima.hpp"
+#include <chimatools/chimatools.hpp>
 
 #include <ntfstl/unique_array.hpp>
 

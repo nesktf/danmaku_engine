@@ -29,7 +29,8 @@ private:
 
 game_state::game_state(std::unique_ptr<assets::asset_bundle>&& assets,
                        std::unique_ptr<stage::stage_scene>&& scene, lua::stage_env&& lua_env) :
-    _assets{std::move(assets)}, _scene{std::move(scene)}, _lua_env{std::move(lua_env)}, _t{0.f} {}
+    _assets{std::move(assets)},
+    _scene{std::move(scene)}, _lua_env{std::move(lua_env)}, _t{0.f} {}
 
 expect<game_state> game_state::load_from_package(const std::string& path, chima::context& chima) {
   sol::state cfg_state;
