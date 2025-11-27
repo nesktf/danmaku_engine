@@ -30,27 +30,27 @@ u32 lua_projectile::get_handle() const {
 
 bool lua_projectile::is_alive(sol::this_state ts) const {
   auto& scene = lua_stage::instance(ts)->scene();
-  return scene.is_projectile_alive(_handle);
+  return scene.get_projectiles().is_alive(_handle);
 }
 
 void lua_projectile::kill(sol::this_state ts) const {
   auto& scene = lua_stage::instance(ts)->scene();
-  scene.kill_projectile(_handle);
+  scene.get_projectiles().kill(_handle);
 }
 
 void lua_projectile::set_pos(sol::this_state ts, f32 x, f32 y) {
   auto& scene = lua_stage::instance(ts)->scene();
-  scene.set_proj_pos(_handle, x, y);
+  scene.get_projectiles().at(_handle).pos(x, y);
 }
 
 vec2 lua_projectile::get_pos(sol::this_state ts) {
   auto& scene = lua_stage::instance(ts)->scene();
-  return scene.get_proj_pos(_handle);
+  return scene.get_projectiles().at(_handle).pos();
 }
 
 void lua_projectile::set_movement(sol::this_state ts, stage::entity_movement movement) {
   auto& scene = lua_stage::instance(ts)->scene();
-  scene.set_proj_mov(_handle, movement);
+  scene.get_projectiles().at(_handle).movement(movement);
 }
 
 lua_stage::lua_stage(stage_env& env) : _env{env} {}
@@ -78,33 +78,33 @@ sol::variadic_results lua_stage::get_boss(sol::this_state ts, u32 slot) {
 
 namespace {
 
-auto parse_proj_args(sol::table& args) -> expect<stage::projectile_args> {
-  const auto parse_vec2 = [&](const char* name) -> ntf::optional<vec2> {
-    auto lua_vec = args[name].get<sol::optional<sol::table>>();
-    if (!lua_vec.has_value()) {
-      return {ntf::nullopt};
-    }
-    auto pos_x = (*lua_vec)["x"].get<sol::optional<f32>>();
-    if (!pos_x.has_value()) {
-      return {ntf::nullopt};
-    }
-    auto pos_y = (*lua_vec)["y"].get<sol::optional<f32>>();
-    if (!pos_y.has_value()) {
-      return {ntf::nullopt};
-    }
-    return {ntf::in_place, *pos_x, *pos_y};
-  };
+auto parse_vec2(sol::table& args, const char* name) -> ntf::optional<vec2> {
+  auto lua_vec = args[name].get<sol::optional<sol::table>>();
+  if (!lua_vec.has_value()) {
+    return {ntf::nullopt};
+  }
+  auto pos_x = (*lua_vec)["x"].get<sol::optional<f32>>();
+  if (!pos_x.has_value()) {
+    return {ntf::nullopt};
+  }
+  auto pos_y = (*lua_vec)["y"].get<sol::optional<f32>>();
+  if (!pos_y.has_value()) {
+    return {ntf::nullopt};
+  }
+  return {ntf::in_place, *pos_x, *pos_y};
+}
 
-  auto pos = parse_vec2("pos");
+auto parse_proj_args(sol::table& args) -> expect<stage::projectile_args> {
+  auto pos = parse_vec2(args, "pos");
   if (!pos.has_value()) {
     return {ntf::unexpect, "No position"};
   }
 
-  auto vel = parse_vec2("vel");
+  auto vel = parse_vec2(args, "vel");
   if (!vel.has_value()) {
     return {ntf::unexpect, "No velocity"};
   }
-  auto scale = parse_vec2("scale");
+  auto scale = parse_vec2(args, "scale");
 
   auto sprite_arg = args["sprite"].get<sol::optional<lua_sprite>>();
   if (!sprite_arg.has_value()) {
@@ -137,7 +137,8 @@ sol::variadic_results lua_stage::spawn_proj(sol::this_state ts, sol::table args)
   sol::variadic_results res;
 
   auto proj = parse_proj_args(args).transform([&](stage::projectile_args&& args) {
-    return lua_stage::instance(ts)->scene().spawn_projectile(std::move(args));
+    auto& scene = lua_stage::instance(ts)->scene();
+    return scene.get_projectiles().spawn(std::move(args));
   });
   if (!proj.has_value()) {
     res.push_back({ts, sol::nil});
@@ -164,7 +165,8 @@ sol::table lua_stage::spawn_proj_n(sol::this_state ts, u32 count, sol::protected
   u32 i = 1;
   for (auto& arg : args) {
     auto proj = parse_proj_args(arg).transform([&](stage::projectile_args&& args) {
-      return lua_stage::instance(ts)->scene().spawn_projectile(std::move(args));
+      auto& scene = lua_stage::instance(ts)->scene();
+      return scene.get_projectiles().spawn(std::move(args));
     });
     if (proj.has_value()) {
       out[i] = *proj;
@@ -172,6 +174,84 @@ sol::table lua_stage::spawn_proj_n(sol::this_state ts, u32 count, sol::protected
     }
   }
   return out;
+}
+
+namespace {
+
+auto parse_sprite_args(sol::table& args) -> expect<stage::sprite_args> {
+  auto pos = parse_vec2(args, "pos");
+  if (!pos.has_value()) {
+    return {ntf::unexpect, "No position"};
+  }
+
+  auto vel = parse_vec2(args, "vel");
+  if (!vel.has_value()) {
+    return {ntf::unexpect, "No velocity"};
+  }
+  auto scale = parse_vec2(args, "scale");
+
+  auto sprite_arg = args["sprite"].get<sol::optional<lua_sprite>>();
+  if (!sprite_arg.has_value()) {
+    return {ntf::unexpect, "No sprite"};
+  }
+  auto [atlas, sprite] = sprite_arg->get();
+
+  const real rot = args["rot"].get_or(0.f);
+  const real ang_speed = args["angular_speed"].get_or(0.f);
+  const auto movement = args["movement"].get<sol::optional<stage::entity_movement>>();
+
+  return {ntf::in_place,
+          *pos,
+          *scale,
+          rot,
+          ang_speed,
+          std::make_tuple(atlas, sprite, vec2{1.f, 1.f}),
+          movement.value_or(stage::entity_movement{})};
+}
+
+} // namespace
+
+sol::variadic_results lua_stage::spawn_sprite(sol::this_state ts, sol::table args) {
+  sol::variadic_results res;
+
+  auto ent = parse_sprite_args(args).transform([&](stage::sprite_args&& args) {
+    auto& scene = lua_stage::instance(ts)->scene();
+    return scene.get_sprites().spawn(std::move(args));
+  });
+  if (!ent.has_value()) {
+    res.push_back({ts, sol::nil});
+  } else {
+    res.push_back({ts, sol::in_place_type<lua_sprite_ent>, *ent});
+  }
+
+  return res;
+}
+
+lua_sprite_ent::lua_sprite_ent(u64 handle) : _handle{handle} {}
+
+bool lua_sprite_ent::is_alive(sol::this_state ts) const {
+  auto& scene = lua_stage::instance(ts)->scene();
+  return scene.get_sprites().is_alive(_handle);
+}
+
+void lua_sprite_ent::kill(sol::this_state ts) const {
+  auto& scene = lua_stage::instance(ts)->scene();
+  scene.get_sprites().kill(_handle);
+}
+
+void lua_sprite_ent::set_pos(sol::this_state ts, f32 x, f32 y) {
+  auto& scene = lua_stage::instance(ts)->scene();
+  scene.get_sprites().at(_handle).pos(x, y);
+}
+
+vec2 lua_sprite_ent::get_pos(sol::this_state ts) {
+  auto& scene = lua_stage::instance(ts)->scene();
+  return scene.get_sprites().at(_handle).pos();
+}
+
+void lua_sprite_ent::set_movement(sol::this_state ts, stage::entity_movement movement) {
+  auto& scene = lua_stage::instance(ts)->scene();
+  scene.get_sprites().at(_handle).set_movement(movement);
 }
 
 auto lua_stage::register_event(std::string name, sol::protected_function func) -> lua_event {
@@ -220,6 +300,14 @@ fn prep_usertypes(sol::table& module) {
     "set_movement", &lua_projectile::set_movement,
     "get_pos", &lua_projectile::get_pos
   );
+  module.new_usertype<lua_sprite_ent>(
+    "sprite_ent", sol::no_constructor,
+    "is_alive", &lua_sprite_ent::is_alive,
+    "kill", &lua_sprite_ent::kill,
+    "set_pos", &lua_sprite_ent::set_pos,
+    "set_movement", &lua_sprite_ent::set_movement,
+    "get_pos", &lua_sprite_ent::get_pos
+  );
   module.new_usertype<stage::entity_movement>(
     "movement", sol::no_constructor,
     "move_linear", +[](f32 vel_x, f32 vel_y) {
@@ -247,7 +335,8 @@ fn prep_usertypes(sol::table& module) {
     "get_player", +[](lua_stage&) -> lua_player { return {}; },
     "get_boss", &lua_stage::get_boss,
     "spawn_proj", &lua_stage::spawn_proj,
-    "spawn_proj_n", &lua_stage::spawn_proj_n
+    "spawn_proj_n", &lua_stage::spawn_proj_n,
+    "spawn_sprite", &lua_stage::spawn_sprite
   );
   // clang-format on
 }

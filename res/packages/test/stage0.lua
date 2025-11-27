@@ -15,19 +15,42 @@ local function stage_run(stage)
   local player = stage:get_player()
   player:set_pos(0, 0)
 
-  local the_proj = stage:spawn_proj {
-    sprite = chara:get_sprite("marisa0"),
+  local marisa_sprite = chara:get_sprite("marisa0")
+  local marisa_boss = stage:spawn_proj {
+    sprite = marisa_sprite,
     pos = { x = 0, y = -200 },
     vel = { x = 0, y = 0},
     scale = { x = 150, y = 150 },
-    -- angular_speed = 2*math.pi,
   }
+  local marisa = stage:spawn_sprite {
+    sprite = marisa_sprite,
+    pos = { x = 200, y = 200 },
+    vel = { x = 0, y = 0},
+    scale = { x = 500, y = 500 },
+  }
+
+  local cirno_sprite = chara:get_sprite("cirno0")
+  local cirno = stage:spawn_sprite {
+    sprite = cirno_sprite,
+    pos = { x = -200, y = 200 },
+    vel = { x = 0, y = 0},
+    scale = { x = -500, y = 500 },
+  }
+
+  local reimu_sprite = chara:get_sprite("reimu0")
+  local reimu = stage:spawn_sprite {
+    sprite = reimu_sprite,
+    pos = { x = -800, y = -150 },
+    vel = { x = 0, y = 0},
+    scale = { x = -500, y = 500 },
+  }
+
   local sprites = {
     "chara_marisa.idle.1",
     "chara_reimu.idle.1"
   }
   local function move_to(x, y)
-    local proj_pos = the_proj:get_pos()
+    local proj_pos = marisa_boss:get_pos()
     stage:spawn_proj_n(16, function(n)
       local dir_x = 10*math.cos(2*math.pi*n/16)
       local dir_y = 10*math.sin(2*math.pi*n/16)
@@ -65,15 +88,17 @@ local function stage_run(stage)
         movement = okuu.stage.movement.move_linear(dir.real, dir.imag)
       }
     end)
-    the_proj:set_movement(okuu.stage.movement.move_towards(10., 10., x, y))
+    marisa_boss:set_movement(okuu.stage.movement.move_towards(10., 10., x, y))
     stage:trigger_event("stage::on_boss_move", {x = proj_pos.x, y = proj_pos.y})
   end
 
   while (true) do
+    reimu:set_movement(okuu.stage.movement.move_linear(20, 0))
     move_to(-150, -250)
     stage:yield_secs(.5)
     move_to(150, -250)
     stage:yield_secs(.5)
+    reimu:set_pos(-600, -150)
   end
 end
 

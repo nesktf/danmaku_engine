@@ -10,8 +10,9 @@ entity_movement::entity_movement(vec2 vel, vec2 acc, real ret) noexcept :
 
 entity_movement::entity_movement(vec2 vel, vec2 acc, real ret, vec2 attr, vec2 attr_p,
                                  real attr_exp) noexcept :
-    _vel{vel.x, vel.y}, _acc{acc.x, acc.y}, _ret{ret}, _attr{attr.x, attr.y},
-    _attr_p{attr_p.x, attr_p.y}, _attr_exp{attr_exp} {}
+    _vel{vel.x, vel.y},
+    _acc{acc.x, acc.y}, _ret{ret}, _attr{attr.x, attr.y}, _attr_p{attr_p.x, attr_p.y},
+    _attr_exp{attr_exp} {}
 
 void entity_movement::next_pos(vec2& curr_pos) {
   cmplx pos{curr_pos.x, curr_pos.y};
@@ -104,9 +105,26 @@ entity_sprite boss_entity::sprite() const {
   return *_sprite;
 }
 
+sprite_entity::sprite_entity(sprite_args args) :
+    _pos{args.pos}, _scale{args.scale}, _rot{args.rot}, _angular_speed{args.angular_speed},
+    _sprite{args.sprite}, _movement{args.movement} {}
+
+mat4 sprite_entity::transform(const render::sprite_uvs& uvs) const {
+  shogle::transform2d<real> t{};
+  f32 ratio = uvs.x_lin / uvs.y_lin;
+  t.pos(_pos).scale(_scale.x * ratio, _scale.y);
+  mat4 mat = t.world();
+  return mat;
+}
+
+void sprite_entity::tick() {
+  _movement.next_pos(_pos);
+}
+
 player_entity::player_entity(assets::atlas_handle atlas, vec2 pos, animation_data&& anims,
                              assets::sprite_animator&& animator) :
-    _ticks{0}, _pos{pos}, _vel{}, _flags{0}, _animator{std::move(animator)}, _atlas{atlas},
+    _ticks{0},
+    _pos{pos}, _vel{}, _flags{0}, _animator{std::move(animator)}, _atlas{atlas},
     _anim_state{animation_state::IDLE}, _anims{std::move(anims)} {}
 
 void player_entity::tick() {

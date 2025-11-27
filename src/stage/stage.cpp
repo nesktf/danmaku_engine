@@ -11,8 +11,9 @@ namespace okuu::stage {
 namespace {
 
 template<typename T>
-concept renderable_entity = requires(const T ent) {
+concept renderable_entity = requires(const T ent, const render::sprite_uvs& uvs) {
   { ent.sprite() } -> std::same_as<stage::entity_sprite>;
+  { ent.transform(uvs) } -> std::same_as<mat4>;
 };
 
 } // namespace
@@ -47,6 +48,8 @@ void stage_scene::render(double dt, double alpha, assets::asset_bundle& assets) 
     });
   };
 
+  _sprites.for_each([&](sprite_entity& spr) { render_sprite(spr); });
+
   _projs.for_each([&](projectile_entity& proj) { render_sprite(proj); });
 
   render_sprite(_player);
@@ -80,35 +83,8 @@ void stage_scene::tick() {
   });
 
   _player.tick();
+  _sprites.for_each([&](sprite_entity& spr) { spr.tick(); });
   ++_ticks;
-}
-
-u64 stage_scene::spawn_projectile(projectile_args&& args) {
-  auto elem = _projs.request_elem(std::move(args));
-  return elem.handle();
-}
-
-void stage_scene::kill_projectile(u64 handle) {
-  _projs.return_elem(handle);
-}
-
-bool stage_scene::is_projectile_alive(u64 handle) {
-  return _projs.is_valid(handle);
-}
-
-void stage_scene::set_proj_pos(u64 handle, f32 x, f32 y) {
-  decltype(_projs)::element elem{_projs, handle};
-  elem->pos(x, y);
-}
-
-vec2 stage_scene::get_proj_pos(u64 handle) {
-  decltype(_projs)::element elem{_projs, handle};
-  return elem->pos();
-}
-
-void stage_scene::set_proj_mov(u64 handle, stage::entity_movement movement) {
-  decltype(_projs)::element elem{_projs, handle};
-  elem->movement(movement);
 }
 
 ntf::optional<u32> stage_scene::spawn_boss(const boss_args& args) {

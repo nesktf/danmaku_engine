@@ -72,6 +72,9 @@ struct projectile_args {
 
 class projectile_entity {
 public:
+  using args_type = projectile_args;
+
+public:
   projectile_entity(projectile_args args);
 
 public:
@@ -165,6 +168,55 @@ private:
   entity_movement _movement;
   u32 _flags;
   ntf::optional<entity_sprite> _sprite;
+};
+
+struct sprite_args {
+  vec2 pos;
+  vec2 scale;
+  real rot;
+  real angular_speed;
+  entity_sprite sprite;
+  entity_movement movement;
+};
+
+class sprite_entity {
+public:
+  using args_type = sprite_args;
+
+public:
+  sprite_entity(sprite_args args);
+
+public:
+  mat4 transform(const render::sprite_uvs& uvs) const;
+  void tick();
+
+  vec2 pos() const { return _pos; }
+
+  sprite_entity& pos(real x, real y) {
+    _pos.x = x;
+    _pos.y = y;
+    return *this;
+  }
+
+  entity_sprite sprite() const { return _sprite; }
+
+  sprite_entity& set_sprite(entity_sprite sprite) {
+    _sprite = sprite;
+    return *this;
+  }
+
+  sprite_entity& set_movement(entity_movement movement) {
+    _movement = movement;
+    return *this;
+  }
+
+private:
+  vec2 _pos;
+  vec2 _scale;
+  real _rot;
+  real _angular_speed;
+  entity_sprite _sprite;
+  entity_movement _movement;
 };
 
 class player_entity {

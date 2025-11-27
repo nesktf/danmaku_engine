@@ -44,6 +44,22 @@ private:
   u64 _handle;
 };
 
+class lua_sprite_ent {
+public:
+  lua_sprite_ent(u64 handle);
+
+  u64 get_handle() const { return _handle; }
+
+  bool is_alive(sol::this_state ts) const;
+  void kill(sol::this_state ts) const;
+  void set_pos(sol::this_state ts, f32 x, f32 y);
+  vec2 get_pos(sol::this_state ts);
+  void set_movement(sol::this_state ts, stage::entity_movement movement);
+
+private:
+  u64 _handle;
+};
+
 class lua_event {
 public:
   using list_iterator = std::list<sol::protected_function>::iterator;
@@ -84,6 +100,8 @@ public:
   sol::variadic_results spawn_proj(sol::this_state ts, sol::table args);
 
   sol::table spawn_proj_n(sol::this_state ts, u32 count, sol::protected_function func);
+
+  sol::variadic_results spawn_sprite(sol::this_state ts, sol::table args);
 
 public:
   static lua_stage setup_module(sol::table& okuu_lib, stage_env& env);

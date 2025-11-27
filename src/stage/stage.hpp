@@ -7,6 +7,54 @@
 
 namespace okuu::stage {
 
+// template<typename T>
+// concept entity_type = requires(T entity, const T const_entity, typename T::args_type args) {
+//   { const_entity.pos(real{}, real{}) } -> std::same_as<vec2>;
+//   { entity.set_pos(real{}, real{}) } -> ntf::meta::same_as_any<T&, void>;
+//   { const_entity.sprite() } -> std::same_as<entity_sprite>;
+//   requires(std::constructible_from<T, typename T::args_type>);
+// };
+
+template<typename T>
+class entity_list {
+public:
+  using args_type = typename T::args_type;
+  using entity_handle = u64;
+
+public:
+  template<typename... Args>
+  entity_handle spawn(Args&&... args) {
+    auto elem = _entities.request_elem(std::forward<Args>(args)...);
+    return elem.handle();
+  }
+
+  void kill(entity_handle handle) { _entities.return_elem(handle); }
+
+  bool is_alive(entity_handle handle) { return _entities.is_valid(handle); }
+
+  T& at(entity_handle handle) { return _entities.elem_at(handle); }
+
+  const T& at(entity_handle handle) const { return _entities.elem_at(handle); }
+
+  template<typename F>
+  void for_each(F&& func) {
+    _entities.for_each(std::forward<F>(func));
+  }
+
+  template<typename F>
+  void for_each(F&& func) const {
+    _entities.for_each(std::forward<F>(func));
+  }
+
+  template<typename F>
+  void clear_where(F&& func) {
+    _entities.clear_where(std::forward<F>(func));
+  }
+
+private:
+  util::free_list<T> _entities;
+};
+
 class stage_scene {
 public:
   static constexpr size_t MAX_BOSSES = 4u;
@@ -19,12 +67,9 @@ public:
   void render(double dt, double alpha, assets::asset_bundle& assets);
 
 public:
-  u64 spawn_projectile(projectile_args&& args);
-  void kill_projectile(u64 handle);
-  bool is_projectile_alive(u64 handle);
-  void set_proj_pos(u64 handle, f32 x, f32 y);
-  vec2 get_proj_pos(u64 handle);
-  void set_proj_mov(u64 handle, stage::entity_movement movement);
+  entity_list<projectile_entity>& get_projectiles() { return _projs; }
+
+  entity_list<sprite_entity>& get_sprites() { return _sprites; }
 
   ntf::optional<u32> spawn_boss(const boss_args& args);
   void kill_boss(u32 slot);
@@ -39,7 +84,8 @@ public:
 
 private:
   render::stage_renderer _renderer;
-  util::free_list<projectile_entity> _projs;
+  entity_list<projectile_entity> _projs;
+  entity_list<sprite_entity> _sprites;
   std::array<boss_entity, MAX_BOSSES> _bosses;
   u32 _boss_count;
   player_entity _player;
