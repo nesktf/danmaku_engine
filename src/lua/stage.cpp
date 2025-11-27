@@ -1,5 +1,6 @@
 #include "./stage.hpp"
 #include "./assets.hpp"
+#include "./stage_env.hpp"
 
 namespace okuu::lua {
 
@@ -12,13 +13,13 @@ u32 lua_boss::get_slot() const {
 }
 
 bool lua_boss::is_alive(sol::this_state ts) const {
-  auto& stage = lua_stage::instance(ts);
-  return stage.get_boss(_boss_slot).is_active();
+  auto& scene = lua_stage::instance(ts)->scene();
+  return scene.get_boss(_boss_slot).is_active();
 }
 
 void lua_boss::kill(sol::this_state ts) const {
-  auto& stage = lua_stage::instance(ts);
-  stage.kill_boss(_boss_slot);
+  auto& scene = lua_stage::instance(ts)->scene();
+  scene.kill_boss(_boss_slot);
 }
 
 lua_projectile::lua_projectile(u64 handle) : _handle{handle} {}
@@ -28,38 +29,34 @@ u32 lua_projectile::get_handle() const {
 }
 
 bool lua_projectile::is_alive(sol::this_state ts) const {
-  auto& stage = lua_stage::instance(ts);
-  return stage.is_projectile_alive(_handle);
+  auto& scene = lua_stage::instance(ts)->scene();
+  return scene.is_projectile_alive(_handle);
 }
 
 void lua_projectile::kill(sol::this_state ts) const {
-  auto& stage = lua_stage::instance(ts);
-  stage.kill_projectile(_handle);
+  auto& scene = lua_stage::instance(ts)->scene();
+  scene.kill_projectile(_handle);
 }
 
 void lua_projectile::set_pos(sol::this_state ts, f32 x, f32 y) {
-  auto& stage = lua_stage::instance(ts);
-  stage.set_proj_pos(_handle, x, y);
+  auto& scene = lua_stage::instance(ts)->scene();
+  scene.set_proj_pos(_handle, x, y);
 }
 
 vec2 lua_projectile::get_pos(sol::this_state ts) {
-  auto& stage = lua_stage::instance(ts);
-  return stage.get_proj_pos(_handle);
+  auto& scene = lua_stage::instance(ts)->scene();
+  return scene.get_proj_pos(_handle);
 }
 
 void lua_projectile::set_movement(sol::this_state ts, stage::entity_movement movement) {
-  auto& stage = lua_stage::instance(ts);
-  stage.set_proj_mov(_handle, movement);
+  auto& scene = lua_stage::instance(ts)->scene();
+  scene.set_proj_mov(_handle, movement);
 }
 
-lua_stage::lua_stage(stage::stage_scene& scene) : _scene{scene} {}
+lua_stage::lua_stage(stage_env& env) : _env{env} {}
 
 void lua_stage::on_yield(u32 ticks) {
-  _scene->task_wait(ticks);
-}
-
-void lua_stage::trigger_dialog(std::string dialog_id) {
-  NTF_UNUSED(dialog_id);
+  _env->scene().task_wait(ticks);
 }
 
 sol::variadic_results lua_stage::get_boss(sol::this_state ts, u32 slot) {
@@ -69,7 +66,7 @@ sol::variadic_results lua_stage::get_boss(sol::this_state ts, u32 slot) {
     return res;
   }
 
-  auto& boss = _scene->get_boss(slot);
+  auto& boss = _env->scene().get_boss(slot);
   if (!boss.is_active()) {
     res.push_back({ts, sol::nil});
     return res;
@@ -79,7 +76,9 @@ sol::variadic_results lua_stage::get_boss(sol::this_state ts, u32 slot) {
   return res;
 }
 
-static auto parse_proj_args(sol::table& args) -> expect<stage::projectile_args> {
+namespace {
+
+auto parse_proj_args(sol::table& args) -> expect<stage::projectile_args> {
   const auto parse_vec2 = [&](const char* name) -> ntf::optional<vec2> {
     auto lua_vec = args[name].get<sol::optional<sol::table>>();
     if (!lua_vec.has_value()) {
@@ -132,11 +131,13 @@ static auto parse_proj_args(sol::table& args) -> expect<stage::projectile_args> 
           std::move(state_handler)};
 }
 
+} // namespace
+
 sol::variadic_results lua_stage::spawn_proj(sol::this_state ts, sol::table args) {
   sol::variadic_results res;
 
   auto proj = parse_proj_args(args).transform([&](stage::projectile_args&& args) {
-    return lua_stage::instance(ts).spawn_projectile(std::move(args));
+    return lua_stage::instance(ts)->scene().spawn_projectile(std::move(args));
   });
   if (!proj.has_value()) {
     res.push_back({ts, sol::nil});
@@ -163,7 +164,7 @@ sol::table lua_stage::spawn_proj_n(sol::this_state ts, u32 count, sol::protected
   u32 i = 1;
   for (auto& arg : args) {
     auto proj = parse_proj_args(arg).transform([&](stage::projectile_args&& args) {
-      return lua_stage::instance(ts).spawn_projectile(std::move(args));
+      return lua_stage::instance(ts)->scene().spawn_projectile(std::move(args));
     });
     if (proj.has_value()) {
       out[i] = *proj;
@@ -173,6 +174,23 @@ sol::table lua_stage::spawn_proj_n(sol::this_state ts, u32 count, sol::protected
   return out;
 }
 
+auto lua_stage::register_event(std::string name, sol::protected_function func) -> lua_event {
+  auto it = _env->register_event(std::move(name), std::move(func));
+  return {it};
+}
+
+void lua_stage::trigger_event(std::string name, sol::variadic_args args) {
+  _env->trigger_event(std::move(name), std::move(args));
+}
+
+void lua_stage::unregister_event(std::string name, lua_event event) {
+  _env->unregister_event(std::move(name), event.get());
+}
+
+void lua_stage::clear_events(std::string name) {
+  _env->clear_events(std::move(name));
+}
+
 namespace {
 
 fn prep_usertypes(sol::table& module) {
@@ -180,11 +198,11 @@ fn prep_usertypes(sol::table& module) {
   module.new_usertype<lua_player>(
     "player", sol::no_constructor,
     "set_pos", +[](sol::this_state ts, lua_player&, f32 x, f32 y) {
-      auto& player = lua_stage::instance(ts).get_player();
+      auto& player = lua_stage::instance(ts)->scene().get_player();
       player.pos(x, y);
     },
     "get_pos", +[](sol::this_state ts, lua_player&) -> vec2 {
-      auto& player = lua_stage::instance(ts).get_player();
+      auto& player = lua_stage::instance(ts)->scene().get_player();
       return player.pos();
     }
   );
@@ -212,6 +230,9 @@ fn prep_usertypes(sol::table& module) {
       return stage::entity_movement::move_towards({x, y}, {DT*vel_x, DT*vel_y}, {DT, 0.f}, .8f);
     }
   );
+  module.new_usertype<lua_event>(
+    "event", sol::no_constructor
+  );
   module.new_usertype<lua_stage>(
     "stage", sol::no_constructor,
     "yield", sol::yielding(+[](lua_stage& stage) { stage.on_yield(1); }),
@@ -219,7 +240,10 @@ fn prep_usertypes(sol::table& module) {
     "yield_secs", sol::yielding(+[](lua_stage& stage, f32 secs) {
       stage.on_yield(secs_to_ticks(secs));
     }),
-    "trigger_dialog", &lua_stage::trigger_dialog,
+    "trigger_event", &lua_stage::trigger_event,
+    "register_event", &lua_stage::register_event,
+    "unregister_event", &lua_stage::unregister_event,
+    "clear_events", &lua_stage::clear_events,
     "get_player", +[](lua_stage&) -> lua_player { return {}; },
     "get_boss", &lua_stage::get_boss,
     "spawn_proj", &lua_stage::spawn_proj,
@@ -230,16 +254,16 @@ fn prep_usertypes(sol::table& module) {
 
 } // namespace
 
-sol::table lua_stage::setup_module(sol::table& okuu_lib, stage::stage_scene& scene) {
+lua_stage lua_stage::setup_module(sol::table& okuu_lib, stage_env& scene) {
   sol::table stage_module = okuu_lib["stage"].get_or_create<sol::table>();
-  okuu_lib["__curr_stage"] = lua_stage{scene};
+  lua_stage env_stage{scene};
+  okuu_lib["__curr_stage"] = env_stage;
   prep_usertypes(stage_module);
-  return stage_module;
+  return env_stage;
 }
 
-stage::stage_scene& lua_stage::instance(sol::state_view lua) {
-  lua_stage stage = lua["okuu"]["__curr_stage"].get<lua_stage>();
-  return stage.get();
+lua_stage lua_stage::instance(sol::state_view lua) {
+  return lua["okuu"]["__curr_stage"].get<lua_stage>();
 }
 
 } // namespace okuu::lua

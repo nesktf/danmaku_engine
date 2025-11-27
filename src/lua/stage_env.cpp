@@ -66,7 +66,7 @@ fn setup_okuu_base(sol::table& okuu_lib) {
 }
 
 struct stage_data {
-  sol::protected_function stage_setup;
+  sol::optional<sol::protected_function> stage_setup;
   sol::protected_function stage_run;
 };
 
@@ -76,10 +76,10 @@ fn setup_package_module(sol::table& okuu_lib, ntf::optional<stage_data>& stage_d
   package_module["start_stage"].set_function([&](sol::this_state, sol::table args) {
     auto setup = args.get<sol::optional<sol::protected_function>>("setup");
     auto run = args.get<sol::optional<sol::protected_function>>("run");
-    if (!setup.has_value() || !run.has_value()) {
+    if (!run.has_value()) {
       return;
     }
-    stage_data.emplace(std::move(*setup), std::move(*run));
+    stage_data.emplace(std::move(setup), std::move(*run));
   });
 
   return package_module;
@@ -101,8 +101,11 @@ thread_coro thread_coro::from_func(sol::protected_function func) {
   return {std::move(thread), std::move(coro)};
 }
 
-stage_env::stage_env(sol::state&& lua, sol::coroutine&& stage_run) :
-    _lua{std::move(lua)}, _stage_run{std::move(stage_run)} {}
+stage_env::stage_env(stage::stage_scene& scene, sol::state&& lua,
+                     sol::optional<sol::protected_function>&& stage_setup,
+                     sol::coroutine&& stage_run) :
+    _scene{scene},
+    _lua{std::move(lua)}, _stage_setup{std::move(stage_setup)}, _stage_run{std::move(stage_run)} {}
 
 static constexpr std::string_view incl_path = ";res/script/?.lua";
 
@@ -114,7 +117,6 @@ expect<stage_env> stage_env::load(const std::string& script_path, stage::stage_s
   lua["package"]["path"] = incl_path.data();
   auto okuu_lib = lua["okuu"].get_or_create<sol::table>();
   setup_okuu_base(okuu_lib);
-  lua_stage::setup_module(okuu_lib, scene);
   lua_assets::setup_module(okuu_lib, assets);
 
   ntf::optional<stage_data> stage_data;
@@ -126,24 +128,70 @@ expect<stage_env> stage_env::load(const std::string& script_path, stage::stage_s
     if (!stage_data.has_value()) {
       return {ntf::unexpect, "No stage functions defined in lua scriptl"};
     }
-
-    auto setup_res = std::invoke(stage_data->stage_setup);
-    if (!setup_res.valid()) {
-      sol::error err = setup_res;
-      logger::error("Error on script stage_setup \"{}\": {}", script_path, err.what());
-      return {ntf::unexpect, err.what()};
-    }
     sol::coroutine run_coro{lua.lua_state(), stage_data->stage_run};
 
-    return {ntf::in_place, std::move(lua), std::move(run_coro)};
+    return {ntf::in_place, scene, std::move(lua), std::move(stage_data->stage_setup),
+            std::move(run_coro)};
   } catch (const sol::error& err) {
     return {ntf::unexpect, err.what()};
   }
 }
 
+void stage_env::setup_stage_modules() {
+  if (!_stage_setup) {
+    return;
+  }
+  auto okuu_lib = _lua["okuu"].get<sol::table>();
+  auto env = lua_stage::setup_module(okuu_lib, *this);
+  auto setup_res = std::invoke(*_stage_setup, env);
+  if (!setup_res.valid()) {
+    sol::error err = setup_res;
+    logger::error("Error on script stage_setup: {}", err.what());
+  }
+}
+
 void stage_env::run_tasks() {
-  auto& scene = lua_stage::instance(_lua);
-  std::invoke(_stage_run, lua_stage{scene});
+  auto env = lua_stage::instance(_lua);
+  std::invoke(_stage_run, env);
+}
+
+void stage_env::trigger_event(std::string name, sol::variadic_args args) {
+  auto it = _events.find(name);
+  if (it == _events.end()) {
+    return;
+  }
+  for (auto& event : it->second) {
+    std::invoke(event, args);
+  }
+}
+
+auto stage_env::register_event(std::string name, sol::protected_function func) -> list_iterator {
+  auto list_it = _events.find(name);
+  if (list_it == _events.end()) {
+    auto [it, empl] = _events.try_emplace(std::move(name));
+    list_it = it;
+  }
+  NTF_ASSERT(list_it != _events.end());
+  auto& list = list_it->second;
+  auto it = list.insert(list.end(), std::move(func));
+  return {it};
+}
+
+void stage_env::unregister_event(std::string name, list_iterator event) {
+  auto it = _events.find(name);
+  if (it == _events.end()) {
+    return;
+  }
+  it->second.erase(event);
+}
+
+void stage_env::clear_events(std::string name) {
+  auto it = _events.find(name);
+  if (it == _events.end()) {
+    return;
+  }
+  NTF_ASSERT(it != _events.end());
+  it->second.clear();
 }
 
 } // namespace okuu::lua

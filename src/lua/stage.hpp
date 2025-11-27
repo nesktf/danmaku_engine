@@ -3,6 +3,8 @@
 #include "../stage/stage.hpp"
 #include "./sol.hpp"
 
+#include <list>
+
 namespace okuu::lua {
 
 class lua_player {
@@ -42,17 +44,40 @@ private:
   u64 _handle;
 };
 
-class lua_stage {
+class lua_event {
 public:
-  lua_stage(stage::stage_scene& scene);
+  using list_iterator = std::list<sol::protected_function>::iterator;
 
 public:
-  stage::stage_scene& get() { return *_scene; }
+  lua_event(list_iterator it) : _it{it} {}
+
+public:
+  list_iterator get() { return _it; }
+
+private:
+  list_iterator _it;
+};
+
+class stage_env;
+
+class lua_stage {
+public:
+  lua_stage(stage_env& env);
+
+public:
+  stage_env& get() { return *_env; }
+
+  stage_env* operator->() { return &get(); }
+
+  stage_env& operator*() { return get(); }
 
 public:
   void on_yield(u32 ticks);
 
-  void trigger_dialog(std::string dialog_id);
+  void trigger_event(std::string name, sol::variadic_args args);
+  lua_event register_event(std::string name, sol::protected_function func);
+  void unregister_event(std::string name, lua_event event);
+  void clear_events(std::string name);
 
   sol::variadic_results get_boss(sol::this_state ts, u32 slot);
 
@@ -61,11 +86,11 @@ public:
   sol::table spawn_proj_n(sol::this_state ts, u32 count, sol::protected_function func);
 
 public:
-  static sol::table setup_module(sol::table& okuu_lib, stage::stage_scene& scene);
-  static stage::stage_scene& instance(sol::state_view lua);
+  static lua_stage setup_module(sol::table& okuu_lib, stage_env& env);
+  static lua_stage instance(sol::state_view lua);
 
 private:
-  ntf::weak_ptr<stage::stage_scene> _scene;
+  ntf::weak_ptr<stage_env> _env;
 };
 
 } // namespace okuu::lua
