@@ -156,42 +156,19 @@ void stage_env::run_tasks() {
 }
 
 void stage_env::trigger_event(std::string name, sol::variadic_args args) {
-  auto it = _events.find(name);
-  if (it == _events.end()) {
-    return;
-  }
-  for (auto& event : it->second) {
-    std::invoke(event, args);
-  }
+  _events.trigger_event(name, args);
 }
 
 auto stage_env::register_event(std::string name, sol::protected_function func) -> list_iterator {
-  auto list_it = _events.find(name);
-  if (list_it == _events.end()) {
-    auto [it, empl] = _events.try_emplace(std::move(name));
-    list_it = it;
-  }
-  NTF_ASSERT(list_it != _events.end());
-  auto& list = list_it->second;
-  auto it = list.insert(list.end(), std::move(func));
-  return {it};
+  return _events.register_event(name, func);
 }
 
 void stage_env::unregister_event(std::string name, list_iterator event) {
-  auto it = _events.find(name);
-  if (it == _events.end()) {
-    return;
-  }
-  it->second.erase(event);
+  _events.unregister_event(name, event);
 }
 
 void stage_env::clear_events(std::string name) {
-  auto it = _events.find(name);
-  if (it == _events.end()) {
-    return;
-  }
-  NTF_ASSERT(it != _events.end());
-  it->second.clear();
+  _events.clear_events(name);
 }
 
 } // namespace okuu::lua

@@ -6,6 +6,8 @@
 #include "../assets/manager.hpp"
 #include "../stage/stage.hpp"
 
+#include "../util/event.hpp"
+
 #include <list>
 
 namespace okuu::lua {
@@ -61,7 +63,7 @@ private:
   sol::state _lua;
   sol::optional<sol::protected_function> _stage_setup;
   sol::coroutine _stage_run;
-  std::unordered_map<std::string, std::list<sol::protected_function>> _events;
+  util::multi_event_handler<sol::protected_function> _events;
 };
 
 } // namespace okuu::lua

@@ -188,7 +188,7 @@ okuu_render_ctx::okuu_render_ctx(shogle::window&& win_, shogle::context&& ctx_,
   NTF_ASSERT(g_renderer.has_value());
   g_renderer->win.set_viewport_callback([](auto&, uvec2 vp) {
     shogle::framebuffer::get_default(g_renderer->ctx).viewport({0.f, 0.f, vp.x, vp.y});
-    g_renderer->viewport_event.fire(vp.x, vp.y);
+    g_renderer->viewport_event.trigger_event(vp.x, vp.y);
   });
   return {};
 }

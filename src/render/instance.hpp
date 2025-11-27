@@ -35,7 +35,7 @@ public:
   base_pipelines pips;
 
 public:
-  util::event_handler<u32, u32> viewport_event;
+  util::event_handler<ntf::inplace_function<void(u32, u32)>> viewport_event;
 };
 
 extern ntf::nullable<okuu_render_ctx> g_renderer;
