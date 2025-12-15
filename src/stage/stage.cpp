@@ -77,7 +77,7 @@ void stage_scene::tick() {
   }
 
   _projs.for_each([&](projectile_entity& proj) { proj.tick(); });
-  _projs.clear_where([&](projectile_entity& proj) {
+  _projs.clear_where([&](const projectile_entity& proj) {
     auto pos = proj.pos();
     return pos.x > 300 || pos.x < -300 || pos.y > 350 || pos.y < -350;
   });

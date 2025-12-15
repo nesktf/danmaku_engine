@@ -3,7 +3,6 @@
 #include "./entity.hpp"
 
 #include "../render/stage.hpp"
-#include "../util/free_list.hpp"
 
 namespace okuu::stage {
 
@@ -24,35 +23,43 @@ public:
 public:
   template<typename... Args>
   entity_handle spawn(Args&&... args) {
-    auto elem = _entities.request_elem(std::forward<Args>(args)...);
-    return elem.handle();
+    auto elem = _entities.emplace(std::forward<Args>(args)...);
+    return elem.as_u64();
   }
 
-  void kill(entity_handle handle) { _entities.return_elem(handle); }
+  void kill(entity_handle handle) { _entities.remove(ntf::freelist_handle::from_u64(handle)); }
 
-  bool is_alive(entity_handle handle) { return _entities.is_valid(handle); }
+  bool is_alive(entity_handle handle) {
+    return _entities.is_valid(ntf::freelist_handle::from_u64(handle));
+  }
 
-  T& at(entity_handle handle) { return _entities.elem_at(handle); }
+  T& at(entity_handle handle) { return _entities[ntf::freelist_handle::from_u64(handle)]; }
 
-  const T& at(entity_handle handle) const { return _entities.elem_at(handle); }
+  const T& at(entity_handle handle) const {
+    return _entities[ntf::freelist_handle::from_u64(handle)];
+  }
 
   template<typename F>
   void for_each(F&& func) {
-    _entities.for_each(std::forward<F>(func));
+    for (auto& [ent, _] : _entities) {
+      std::invoke(func, ent);
+    }
   }
 
   template<typename F>
   void for_each(F&& func) const {
-    _entities.for_each(std::forward<F>(func));
+    for (const auto& [ent, _] : _entities) {
+      std::invoke(func, ent);
+    }
   }
 
   template<typename F>
   void clear_where(F&& func) {
-    _entities.clear_where(std::forward<F>(func));
+    _entities.remove_where(std::forward<F>(func));
   }
 
 private:
-  util::free_list<T> _entities;
+  ntf::freelist<T> _entities;
 };
 
 class stage_scene {

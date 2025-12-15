@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ntfstl/expected.hpp>
+#include <ntfstl/freelist.hpp>
 #include <ntfstl/logger.hpp>
 #include <ntfstl/types.hpp>
 #include <shogle/math/vector.hpp>
